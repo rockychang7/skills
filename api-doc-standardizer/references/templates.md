@@ -23,6 +23,7 @@
 # 接口名称
 
 ## URL
+> 特别注意：保证url路径的准确性，不要自行假设
 `/cloudapi/example_path`
 
 ## 请求方式
@@ -84,6 +85,9 @@
 
 ````markdown
 # 接口变更说明：接口名称
+
+## 接口URL
+`/cloudapi/example_path`
 
 ## 变更概述
 - 本次变更涉及：[参数 / 响应 / URL / 请求方式 / 示例 / 异常说明 / 字段命名规范]
@@ -235,7 +239,7 @@
 ## 示例 2：修改 API
 
 ### 输入
-把创建订单接口改一下：原来路径是 /order/create，现在改成 /trade/order/create；新增 channel 参数，string，非必填；删除 oldBizType；amount 从 int 改成 string；pageNo 改成 page_no；返回里新增 data.payToken；删除 data.oldStatus；新增异常场景 amount 非法。
+把创建订单接口改一下：原来路径是 /cloudapi/order/create，现在改成 /cloudapi/trade/order/create；新增 channel 参数，string，非必填；删除 oldBizType；amount 从 int 改成 string；pageNo 改成 page_no；返回里新增 data.payToken；删除 data.oldStatus；新增异常场景 amount 非法。
 
 ### 输出
 ````markdown
@@ -248,8 +252,8 @@
 ## 详细变更
 
 ### 1. URL 变更
-- 变更前：`/order/create`
-- 变更后：`/trade/order/create`
+- 变更前：`/cloudapi/order/create`
+- 变更后：`/cloudapi/trade/order/create`
 - 影响说明：所有调用方需更新请求地址
 
 ### 2. 请求参数变更

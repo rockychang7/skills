@@ -90,11 +90,11 @@ description: standardize markdown api documentation from natural-language interf
 ## API Modification Documentation
 
 当任务是修改 API 时，不要重复输出整份新增接口文档，除非用户明确要求。
-默认输出“变更说明”文档，并覆盖所有受影响项。
+默认输出“变更说明”文档，但是特别注意必须标注接口的url,并覆盖所有受影响项。
 
 必须检查并说明是否涉及以下内容：
 
-- 接口路径变更
+- 接口路径有变更时特别说明
 - 请求方式变更
 - 请求参数新增
 - 请求参数删除
