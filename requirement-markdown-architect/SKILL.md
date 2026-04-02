@@ -1,6 +1,6 @@
 ---
 name: requirement-markdown-architect
-description: 将大需求或模糊需求梳理成按功能模块展开的完整 Markdown 文档。适用于需求分析、需求评审、PRD 整理、模块拆解，以及补充每个模块“要做什么、有什么问题、有什么注意点”。
+description: 这个skill需要主动触发，将大需求或模糊需求梳理成按功能模块展开的完整 Markdown 文档。适用于需求分析、需求评审、PRD 整理、模块拆解，以及补充每个模块“要做什么、有什么问题、有什么注意点”。
 ---
 
 # Requirement Markdown Architect
