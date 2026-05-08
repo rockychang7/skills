@@ -1,15 +1,15 @@
 ---
-name: api-doc-standardizer
-description: standardize markdown api documentation from natural-language interface descriptions for any general api, internal service api, backend api, client-facing api, or third-party integration api. use when needs to generate complete documentation for a newly added api, write detailed change notes for a modified api, enforce snake_case field naming, or apply a fixed response envelope with timestamp, ret_code, ret_msg, and data.
+name: cunxin-api-doc-standardizer
+description: Generate strict-format Markdown API documentation for this project. Use when the task requires creating api.md for a new API, generating a strict API change document for a modified API, enforcing snake_case field naming, using the fixed response envelope, and ensuring the URL path follows the /cloudapi convention.
 ---
 
-# API Doc Standardizer
+# Cunxin API Doc Standardizer
 
 ## Overview
 
-将自然语言接口描述整理成统一、可复用的 Markdown API 文档。
-优先区分“新增 API”与“修改 API”两种场景，并严格按对应模板输出。
-此技能适用于通用 API 文档场景，不绑定任何特定厂商、平台或框架。
+将自然语言接口描述整理成当前项目中严格格式的 Markdown API 文档。
+优先区分“新增 API”与“修改 API”两种场景，并严格按固定模板输出。
+本技能绑定当前项目规范，不允许按自由格式输出 API 文档。
 
 ## Workflow Decision
 
@@ -25,10 +25,14 @@ description: standardize markdown api documentation from natural-language interf
 
 - 输出格式始终使用 **Markdown**。
 - 默认使用用户当前对话语言；若用户未指定，中文优先。
+- 输出必须严格遵守 `references/templates.md` 中定义的固定结构、标题顺序、表格列顺序和示例组织方式，不得随意增删顶层章节或调整顺序。
+- 除非用户明确要求，否则生成型 API 文档默认输出到 `docs/generated/<work_id>/api.md`；若为接口变更说明，可输出到 `docs/generated/<work_id>/api-change.md`。
 - 所有参数字段、响应字段、示例 JSON 字段统一转换为 **snake_case**。
 - 如果用户原始描述使用 camelCase、PascalCase 或混合命名，输出时统一转为 snake_case，并保持字段语义不变。
 - 接口名称、路径、业务含义不要擅自改写；仅字段命名风格做统一化处理。
+- 接口路径必须以 `/cloudapi` 开头；若用户给出的路径不符合该规则，必须明确指出并要求确认，不得静默沿用错误路径。
 - 对模糊信息使用“待补充”“未提供”“需确认”明确标注。
+- 即使信息不足，也必须保留模板中的固定章节，不得因为字段缺失而省略章节。
 - 不要混用“新增文档模板”和“修改说明模板”。
 - 修改场景的重点是**把所有涉及到的变更逐项说清楚**，不要只写一句“接口已更新”。
 - 除非用户明确提供了不同响应包裹结构，否则默认使用标准响应结构：`timestamp`、`ret_code`、`ret_msg`、`data`。
@@ -70,11 +74,12 @@ description: standardize markdown api documentation from natural-language interf
 6. 示例
 7. 异常说明
 
-参数与响应部分应尽量结构化展示，推荐表格；若字段层级复杂，可使用分层列表补充说明。
+参数与响应部分必须使用固定表格结构展示；若字段层级复杂，可在固定表格后追加固定子章节说明。
 
 生成时遵守这些规则：
 
 - URL 写明确路径；若未提供域名，只保留接口路径。
+- URL 必须以 `/cloudapi` 开头；若原始输入不符合该规范，必须在文档中显式标记为“需确认”。
 - 请求方式只写标准方法，如 `GET`、`POST`、`PUT`、`DELETE`。
 - 参数至少说明：参数名、类型、是否必填、说明。
 - 参数名一律输出为 snake_case。
@@ -90,7 +95,7 @@ description: standardize markdown api documentation from natural-language interf
 ## API Modification Documentation
 
 当任务是修改 API 时，不要重复输出整份新增接口文档，除非用户明确要求。
-默认输出“变更说明”文档，但是特别注意必须标注接口的url,并覆盖所有受影响项。
+默认输出严格格式的“变更说明”文档，必须覆盖固定章节并标注接口 URL 与请求方式。
 
 必须检查并说明是否涉及以下内容：
 
@@ -111,10 +116,11 @@ description: standardize markdown api documentation from natural-language interf
 输出时遵守这些规则：
 
 - 只写实际发生的变更项，不要为了凑格式虚构不存在的改动。
-- 每一项变更都写清楚“变更前 / 变更后 / 影响说明”中的至少两项；如果变更前信息缺失，明确标注“变更前未提供”。
+- 每一项变更都写清楚“变更前 / 变更后 / 影响说明”；如果某项信息缺失，必须明确标注“未提供”或“未涉及”。
 - 若某次修改同时影响参数、响应、异常说明，必须分别列出，不能合并成一句笼统描述。
 - 若字段命名从驼峰改为下划线，必须作为明确变更项写出。
 - 若变更可能影响现有调用方，必须写出兼容性影响或升级提示。
+- 即使某个固定章节本次没有变化，也必须保留该章节，并明确标注“未涉及”。
 
 详细模板与示例见 `references/templates.md`。
 
@@ -124,6 +130,8 @@ description: standardize markdown api documentation from natural-language interf
 
 - 是否已经正确判断为“新增 API”或“修改 API”
 - 是否使用 Markdown 输出
+- 是否严格使用了固定模板结构，且没有调整章节顺序
+- URL 是否符合 `/cloudapi` 规范
 - 所有字段是否都已统一为 snake_case
 - 新增 API 是否包含 URL、请求方式、参数、响应、示例、异常说明
 - 响应是否按标准结构 `timestamp`、`ret_code`、`ret_msg`、`data` 组织
