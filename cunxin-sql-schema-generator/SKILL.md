@@ -14,7 +14,7 @@ description: Generate MySQL SQL schema reference files for this project using Cu
 - 需要生成新的 MySQL 建表语句
 - 需要生成 schema 参考文件
 - 需要输出 SQL DDL 作为设计产物或交付产物
-- 需要为 `docs/generated/<work_id>/` 生成 SQL schema 文件
+- 需要为 `../../../docs/generated/<work_id>/sql/` 生成 SQL schema 文件
 
 ## 强制规则
 
@@ -44,7 +44,7 @@ ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
 
 - 所有业务表名必须以 `alive_lp_` 开头，后接清晰、稳定的业务语义名称，使用下划线命名法。
 - 如果用户给出的表名不符合 `alive_lp_` 前缀规则，必须先指出问题并确认是否按项目规范修正。
-- 生成的 SQL schema 属于参考产物，应输出到 `docs/generated/<work_id>/`。
+- 生成的 SQL schema 属于参考产物，应输出到 `../../../docs/generated/<work_id>/sql/`。
 - 文件名应尽量表达业务含义，例如：
   - `position-schema.sql`
   - `album-schema.sql`
@@ -58,7 +58,7 @@ ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
 3. 补齐统一公共字段。
 4. 补齐主键、索引、注释和表注释。
 5. 统一追加 `ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci`。
-6. 将最终产物输出到 `docs/generated/<work_id>/`。
+6. 将最终产物输出到 `../../../docs/generated/<work_id>/sql/`。
 
 ## 标准模板
 
@@ -107,4 +107,4 @@ CREATE TABLE `alive_lp_global_position` (
 - 不要使用非 `InnoDB` 引擎。
 - 不要使用与项目不一致的字符集或排序规则。
 - 不要输出无注释的表或字段。
-- 不要将生成结果写到 `docs/generated/<work_id>/` 之外的目录，除非用户明确要求。
+- 不要将生成结果写到 `../../../docs/generated/<work_id>/sql/` 之外的目录，除非用户明确要求。

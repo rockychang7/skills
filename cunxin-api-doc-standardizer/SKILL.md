@@ -26,7 +26,7 @@ description: Generate strict-format Markdown API documentation for this project.
 - 输出格式始终使用 **Markdown**。
 - 默认使用用户当前对话语言；若用户未指定，中文优先。
 - 输出必须严格遵守 `references/templates.md` 中定义的固定结构、标题顺序、表格列顺序和示例组织方式，不得随意增删顶层章节或调整顺序。
-- 除非用户明确要求，否则生成型 API 文档默认输出到 `docs/generated/<work_id>/api.md`；若为接口变更说明，可输出到 `docs/generated/<work_id>/api-change.md`。
+- 除非用户明确要求，否则生成型 API 文档默认输出到 `../../../docs/generated/<work_id>/api/api.md`；若为接口变更说明，可输出到 `../../../docs/generated/<work_id>/api/api-change.md`。
 - 所有参数字段、响应字段、示例 JSON 字段统一转换为 **snake_case**。
 - 如果用户原始描述使用 camelCase、PascalCase 或混合命名，输出时统一转为 snake_case，并保持字段语义不变。
 - 接口名称、路径、业务含义不要擅自改写；仅字段命名风格做统一化处理。
