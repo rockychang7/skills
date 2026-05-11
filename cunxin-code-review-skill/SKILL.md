@@ -1,6 +1,6 @@
 ---
 name: cunxin-code-review-skill
-description: 在当前仓库中，当后端代码任务进入完整 Code Review 阶段，或用户明确要求 review / code review / pr review / 变更评审时，使用此 skill 完成完整静态评审：识别变更类型，按需加载 ARCHITECTURE、BACKEND 与命中的 backend-rules，输出 Findings、Rule Compliance Checklist、Approval Needed、Residual Risks、Testing Gaps，并为每个问题给出处置建议。
+description: 在当前仓库中，当后端代码任务进入完整 Code Review 阶段，或用户明确要求 review / code review / pr review / 变更评审时，使用此 skill 完成完整静态评审：识别变更类型，按需加载 ARCHITECTURE、BACKEND 与命中的 backend-rules，检查规则违规、代码设计质量、隐藏 Bug 和回归风险，输出 Findings、Rule Compliance Checklist、Approval Needed、Residual Risks、Testing Gaps，并为每个问题给出处置建议。
 ---
 
 # Cunxin Code Review Skill
@@ -9,11 +9,14 @@ description: 在当前仓库中，当后端代码任务进入完整 Code Review 
 
 本 Skill 只适用于当前项目后端代码的完整 Code Review，不适用于轻量 review / 自审。
 
-本 Skill 是当前项目完整 Code Review 的主执行体；`../../../docs/backend-rules/06-code-review-best-practice.md` 只负责说明完整 Code Review 的定位、边界、关注点和输出原则。
+本 Skill 是当前项目完整 Code Review 的主执行体；`../../../docs/backend-rules/07-code-review-best-practice.md` 只负责说明完整 Code Review 的定位、边界、关注点和输出原则。
+
+若当前运行环境支持 `sub agent`，应优先由独立 `sub agent` 承载本 Skill 的执行；若不支持，则由当前 Agent 直接执行，但评审范围、输出结构和处置边界保持不变。
 
 本 Skill 的目标不是复述代码做了什么，而是识别：
 
 - 规则违规
+- 代码设计质量问题
 - 隐藏 Bug
 - 兼容性风险
 - 数据一致性风险
@@ -61,18 +64,20 @@ description: 在当前仓库中，当后端代码任务进入完整 Code Review 
 - 必须始终加载：
   - `../../../docs/ARCHITECTURE.md`
   - `../../../docs/BACKEND.md`
-  - `../../../docs/backend-rules/06-code-review-best-practice.md`
+  - `../../../docs/backend-rules/07-code-review-best-practice.md`
 - 按变更类型继续加载：
+  - 代码设计与职责拆分：`../../../docs/backend-rules/02-code-design-best-practice.md`
   - 技术栈与版本兼容：`../../../docs/backend-rules/01-tech-stack.md`
-  - DAO / Repository / Mapper / XML / SQL：`../../../docs/backend-rules/02-dao-best-practice.md`
-  - 日志与异常：`../../../docs/backend-rules/03-log-exception-best-practice.md`
-  - SQL schema / DDL 生成产物：`../../../docs/backend-rules/04-sql-schema-generation-rule.md`
-  - API 文档 / 接口快照生成产物：`../../../docs/backend-rules/05-api-doc-generation-rule.md`
+  - DAO / Repository / Mapper / XML / SQL：`../../../docs/backend-rules/03-dao-best-practice.md`
+  - 日志与异常：`../../../docs/backend-rules/04-log-exception-best-practice.md`
+  - SQL schema / DDL 生成产物：`../../../docs/backend-rules/05-sql-schema-generation-rule.md`
+  - API 文档 / 接口快照生成产物：`../../../docs/backend-rules/06-api-doc-generation-rule.md`
 
 ### 3. 执行两条主线评审
 
 - 主线一：规则符合性评审
   - 架构与模块边界
+  - 代码设计质量：高内聚低耦合、职责边界、方法粒度、抽象复用、耦合控制
   - 技术栈与版本兼容
   - DAO / Repository / Mapper / XML / SQL
   - 日志与异常
@@ -92,7 +97,7 @@ description: 在当前仓库中，当后端代码任务进入完整 Code Review 
   - `auto_fix`
   - `require_approval`
   - `report_only`
-- 处置建议必须遵守 `../../../docs/WORKFLOW.md` 中的 disposition / approval 规则，并遵守 `../../../docs/backend-rules/06-code-review-best-practice.md` 中的输出原则
+- 处置建议必须遵守 `../../../docs/WORKFLOW.md` 中的 disposition / approval 规则，并遵守 `../../../docs/backend-rules/07-code-review-best-practice.md` 中的输出原则
 - 本 Skill 只能给出处置建议，不能绕过工作流自行决定扩大范围或继续自动修改
 
 ### 5. 输出固定结果
@@ -119,6 +124,7 @@ description: 在当前仓库中，当后端代码任务进入完整 Code Review 
 
 - 不要把完整 Code Review 降级成普通摘要
 - 不要跳过任一规则维度而不说明原因
+- 不要忽略 `Controller` / `Service` / `Manager` 中的大方法、职责混杂、错误抽象或高耦合信号
 - 不要忽略 XML、Mapper、配置、常量、异常码、任务文档和生成产物
 - 不要把测试验收动作混进 Code Review 中
 - 不要在 `review-only` 场景下擅自修改代码
@@ -126,7 +132,8 @@ description: 在当前仓库中，当后端代码任务进入完整 Code Review 
 
 ## Resources
 
-- `../../../docs/backend-rules/06-code-review-best-practice.md`
+- `../../../docs/backend-rules/07-code-review-best-practice.md`
+- `../../../docs/backend-rules/02-code-design-best-practice.md`
 - `../../../docs/WORKFLOW.md`
 - `../../../docs/BACKEND.md`
 - `../../../docs/ARCHITECTURE.md`

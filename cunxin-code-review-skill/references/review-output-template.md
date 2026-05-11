@@ -10,6 +10,7 @@
 ## Rule Compliance Checklist
 
 - 架构与模块边界：符合 / 不适用
+- 代码设计质量：符合 / 不适用
 - 技术栈与版本兼容：符合 / 不适用
 - DAO / Repository / Mapper / XML / SQL：符合 / 不适用
 - 日志与异常：符合 / 不适用
@@ -56,6 +57,7 @@
 ## Rule Compliance Checklist
 
 - 架构与模块边界：符合 / 不符合 / 不适用
+- 代码设计质量：符合 / 不符合 / 不适用
 - 技术栈与版本兼容：符合 / 不符合 / 不适用
 - DAO / Repository / Mapper / XML / SQL：符合 / 不符合 / 不适用
 - 日志与异常：符合 / 不符合 / 不适用

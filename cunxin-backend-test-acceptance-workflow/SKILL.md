@@ -58,7 +58,7 @@ description: 在当前仓库中，当 Spring Boot 后端代码发生改动后，
 - 先读取：
   - `../../../docs/BACKEND.md`
   - `../../../docs/backend-rules/01-tech-stack.md`
-  - `../../../docs/backend-rules/07-test-acceptance-best-practice.md`
+  - `../../../docs/backend-rules/08-test-acceptance-best-practice.md`
 - 读取当前需求、当前改动范围和已确认结论。
 - 基于当前改动先拆出“功能点 -> 测试场景 -> 预期结果”的初始清单，作为后续测试执行和结果回填的骨架。
 - 识别本次改动落在哪些后端层次：
@@ -343,7 +343,7 @@ curl -X GET "{{baseUrl}}/cloudapi/printer/detail?id=" \
 
 ## Resources
 
-- `../../../docs/backend-rules/07-test-acceptance-best-practice.md`
+- `../../../docs/backend-rules/08-test-acceptance-best-practice.md`
 - `../../../docs/backend-rules/01-tech-stack.md`
 - `../../../docs/BACKEND.md`
 - `references/acceptance-checklist-template.md`
