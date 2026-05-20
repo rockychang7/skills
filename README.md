@@ -1,40 +1,42 @@
 # Personal Skills Collection
 
-这是一个用于沉淀、整理和维护个人 AI / Agent skills 的仓库。这里收集的是我在不同任务场景下反复使用、持续打磨的 skill，方便后续复用、维护和扩展。
+English | [简体中文](./README.zh-CN.md)
 
-## 什么是 Skill
+This repository is a personal collection of reusable AI / agent skills. It is meant to archive, organize, and maintain the skills I repeatedly use across different task scenarios, so they can be reused, refined, and expanded over time.
 
-`skill` 可以理解成一套面向特定任务场景的可复用说明和约束集合。它通常会定义：
+## What Is a Skill
 
-- 适用场景
-- 触发条件
-- 工作流程
-- 输出要求
-- 参考模板或补充资料
+A `skill` is a reusable set of instructions and constraints for a specific type of task. It usually defines:
 
-在这个仓库里，一个 skill 通常包含以下内容：
+- when it should be used
+- trigger conditions
+- workflow
+- output requirements
+- reference templates or supporting materials
 
-- `SKILL.md`：skill 的主说明文件，定义职责、规则、流程和输出方式
-- `references/`：可选的参考资料目录，用于存放模板、示例或补充说明
+In this repository, a skill usually contains:
 
-## 项目定位
+- `SKILL.md`: the main specification file that defines the skill's responsibility, rules, workflow, and output format
+- `references/`: optional supporting materials such as templates, examples, and supplemental notes
 
-这个项目是一个个人的 skill 收藏集，重点是把常用、稳定、可复用的能力按场景沉淀下来，而不是每次都从零开始临时组织提示词或规则。
+## Project Positioning
 
-它主要用于：
+This project is a personal skill collection. The goal is to capture stable, reusable capabilities by scenario instead of rebuilding prompts or workflows from scratch every time.
 
-- 沉淀个人常用的 AI / Agent 工作流
-- 固定常见任务的处理方式和输出结构
-- 统一不同场景下的约束、模板和检查清单
-- 方便后续快速检索、复用和持续扩展
+It is mainly used to:
 
-## 当前收录的 Skills
+- preserve reusable AI / agent workflows
+- standardize how common tasks are handled and structured
+- keep reusable constraints, templates, and checklists together
+- make skills easier to search, reuse, and expand over time
 
-- `api-html-generate`：用于生成或更新独立的 API 说明 HTML 页面，适合接口文档页、接口变更说明页等场景。
-- `code-review`：用于执行结构化代码评审，重点关注问题发现、风险识别、规则符合性和评审结论输出。
-- `test-workflow`：用于处理测试相关任务，包括测试层级决策、场景设计、补测试、执行验证和测试结论整理。
+## Current Skills
 
-## 目录结构
+- `api-html-generate`: generates or updates standalone HTML pages for API documentation and API change notes
+- `code-review`: performs structured code reviews with a focus on findings, risks, compliance, and review conclusions
+- `test-workflow`: supports testing work such as test-level decisions, scenario design, test additions, execution, and result summaries
+
+## Directory Structure
 
 ```text
 skills/
@@ -49,23 +51,24 @@ skills/
 │  └─ references/
 ├─ .gitignore
 ├─ LICENSE
-└─ README.md
+├─ README.md
+└─ README.zh-CN.md
 ```
 
-## 使用方式
+## Usage
 
-1. 根据任务类型找到对应的 skill 目录。
-2. 先阅读该目录下的 `SKILL.md`，了解它的适用范围、流程和输出要求。
-3. 如果目录中包含 `references/`，再结合其中的模板或参考资料一起使用。
-4. 每个 skill 的具体边界和规范，以该目录内的说明文件为准。
+1. Find the skill directory that matches your task.
+2. Read its `SKILL.md` first to understand the scope, workflow, and output requirements.
+3. If the directory includes `references/`, use those templates or supporting materials as needed.
+4. Treat the files inside each skill directory as the source of truth for that skill.
 
-## 维护原则
+## Maintenance Principles
 
-- 内容优先可复用，而不是一次性说明
-- 结构尽量稳定，方便持续新增和调整
-- 文档保持直接、清晰、可检索
-- 新增 skill 时，优先补齐主说明和必要参考资料
+- prefer reusable content over one-off notes
+- keep the structure stable so new skills can be added easily
+- keep documentation direct, clear, and searchable
+- when adding a new skill, include the main specification and any necessary references
 
 ## License
 
-本仓库当前使用 `MIT` License。
+This repository is licensed under the `MIT` License.
