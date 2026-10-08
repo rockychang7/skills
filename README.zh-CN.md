@@ -1,74 +1,65 @@
-# Personal Skills Collection
+# Skills
 
 [English](./README.md) | 简体中文
 
-这是一个用于沉淀、整理和维护个人 AI / Agent skills 的仓库。这里收集的是我在不同任务场景下反复使用、持续打磨的 skill，方便后续复用、维护和扩展。
+个人的通用 Agent Skill 合集，主要是在各个项目里反复用到的流程类、工具类 skill。所有 skill 遵循 [Agent Skills](https://agentskills.io/specification) 规范，可以用 [skills](https://github.com/vercel-labs/skills) 命令行工具安装，并收录在 [skills.sh](https://www.skills.sh/)。
 
-## 什么是 Skill
+## 安装
 
-`skill` 可以理解成一套面向特定任务场景的可复用说明和约束集合。它通常会定义：
+```bash
+# 安装全部 skill
+npx skills add rockychang7/skills
 
-- 适用场景
-- 触发条件
-- 工作流程
-- 输出要求
-- 参考模板或补充资料
+# 只查看有哪些 skill，不安装
+npx skills add rockychang7/skills --list
 
-在这个仓库里，一个 skill 通常包含以下内容：
+# 只安装某一个 skill
+npx skills add rockychang7/skills --skill <skill-name>
 
-- `SKILL.md`：skill 的主说明文件，定义职责、规则、流程和输出方式
-- `references/`：可选的参考资料目录，用于存放模板、示例或补充说明
+# 更新已安装的 skill
+npx skills update
+```
 
-## 项目定位
+## 现有 Skill
 
-这个项目是一个个人的 skill 收藏集，重点是把常用、稳定、可复用的能力按场景沉淀下来，而不是每次都从零开始临时组织提示词或规则。
-
-它主要用于：
-
-- 沉淀个人常用的 AI / Agent 工作流
-- 固定常见任务的处理方式和输出结构
-- 统一不同场景下的约束、模板和检查清单
-- 方便后续快速检索、复用和持续扩展
-
-## 当前收录的 Skills
-
-- `api-html-generate`：用于生成或更新独立的 API 说明 HTML 页面，适合接口文档页、接口变更说明页等场景。
-- `code-review`：用于执行结构化代码评审，重点关注问题发现、风险识别、规则符合性和评审结论输出。
-- `test-workflow`：用于处理测试相关任务，包括测试层级决策、场景设计、补测试、执行验证和测试结论整理。
+| Skill | 说明 |
+| --- | --- |
+| _暂无_ | |
 
 ## 目录结构
 
 ```text
-skills/
-├─ api-html-generate/
-│  ├─ SKILL.md
-│  └─ references/
-├─ code-review/
-│  ├─ SKILL.md
-│  └─ references/
-├─ test-workflow/
-│  ├─ SKILL.md
-│  └─ references/
-├─ .gitignore
-├─ LICENSE
+.
+├─ skills/                    # 所有对外发布的 skill 都放这里
+│  └─ <skill-name>/
+│     ├─ SKILL.md             # 必须：元信息 + 说明
+│     ├─ references/          # 可选：参考文档、输出模板
+│     ├─ scripts/             # 可选：可执行脚本
+│     └─ assets/              # 可选：静态资源
+├─ template/
+│  └─ SKILL.template.md       # 新建 skill 用的模板
 ├─ README.md
-└─ README.zh-CN.md
+├─ README.zh-CN.md
+└─ LICENSE
 ```
 
-## 使用方式
+## 新增一个 Skill
 
-1. 根据任务类型找到对应的 skill 目录。
-2. 先阅读该目录下的 `SKILL.md`，了解它的适用范围、流程和输出要求。
-3. 如果目录中包含 `references/`，再结合其中的模板或参考资料一起使用。
-4. 每个 skill 的具体边界和规范，以该目录内的说明文件为准。
+1. 新建 `skills/<skill-name>/` 文件夹，把 `template/SKILL.template.md` 复制进去并改名为 `SKILL.md`。
+2. 填写开头的元信息：
+   - `name`：只能用小写字母、数字和单个横杠，最多 64 个字符，**必须和文件夹同名**。
+   - `description`：写清楚这个 skill 做什么、什么时候用，最多 1024 个字符，带上触发关键词。
+3. `SKILL.md` 尽量控制在 500 行以内，篇幅长的内容放到 `references/`。
+4. 在本地确认命令行工具能识别到它：
 
-## 维护原则
+   ```bash
+   npx skills add . --list
+   ```
 
-- 内容优先可复用，而不是一次性说明
-- 结构尽量稳定，方便持续新增和调整
-- 文档保持直接、清晰、可检索
-- 新增 skill 时，优先补齐主说明和必要参考资料
+5. 在中英文两份 README 的"现有 Skill"表格里各加一行，然后提交并推送。
 
-## License
+仓库在 GitHub 上公开后，只要有人通过 `npx skills add rockychang7/skills` 安装，skill 就会自动出现在 [skills.sh](https://www.skills.sh/) 上。
 
-本仓库当前使用 `MIT` License。
+## 开源协议
+
+[MIT](./LICENSE)

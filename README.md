@@ -1,74 +1,65 @@
-# Personal Skills Collection
+# Skills
 
 English | [简体中文](./README.zh-CN.md)
 
-This repository is a personal collection of reusable AI / agent skills. It is meant to archive, organize, and maintain the skills I repeatedly use across different task scenarios, so they can be reused, refined, and expanded over time.
+A personal collection of reusable agent skills — mostly workflow and tooling skills that I use across projects. Skills follow the [Agent Skills](https://agentskills.io/specification) format and can be installed with the [skills](https://github.com/vercel-labs/skills) CLI, listed on [skills.sh](https://www.skills.sh/).
 
-## What Is a Skill
+## Install
 
-A `skill` is a reusable set of instructions and constraints for a specific type of task. It usually defines:
+```bash
+# Install all skills
+npx skills add rockychang7/skills
 
-- when it should be used
-- trigger conditions
-- workflow
-- output requirements
-- reference templates or supporting materials
+# List available skills without installing
+npx skills add rockychang7/skills --list
 
-In this repository, a skill usually contains:
+# Install a specific skill
+npx skills add rockychang7/skills --skill <skill-name>
 
-- `SKILL.md`: the main specification file that defines the skill's responsibility, rules, workflow, and output format
-- `references/`: optional supporting materials such as templates, examples, and supplemental notes
-
-## Project Positioning
-
-This project is a personal skill collection. The goal is to capture stable, reusable capabilities by scenario instead of rebuilding prompts or workflows from scratch every time.
-
-It is mainly used to:
-
-- preserve reusable AI / agent workflows
-- standardize how common tasks are handled and structured
-- keep reusable constraints, templates, and checklists together
-- make skills easier to search, reuse, and expand over time
-
-## Current Skills
-
-- `api-html-generate`: generates or updates standalone HTML pages for API documentation and API change notes
-- `code-review`: performs structured code reviews with a focus on findings, risks, compliance, and review conclusions
-- `test-workflow`: supports testing work such as test-level decisions, scenario design, test additions, execution, and result summaries
-
-## Directory Structure
-
-```text
-skills/
-├─ api-html-generate/
-│  ├─ SKILL.md
-│  └─ references/
-├─ code-review/
-│  ├─ SKILL.md
-│  └─ references/
-├─ test-workflow/
-│  ├─ SKILL.md
-│  └─ references/
-├─ .gitignore
-├─ LICENSE
-├─ README.md
-└─ README.zh-CN.md
+# Update installed skills
+npx skills update
 ```
 
-## Usage
+## Available Skills
 
-1. Find the skill directory that matches your task.
-2. Read its `SKILL.md` first to understand the scope, workflow, and output requirements.
-3. If the directory includes `references/`, use those templates or supporting materials as needed.
-4. Treat the files inside each skill directory as the source of truth for that skill.
+| Skill | Description |
+| --- | --- |
+| _None yet_ | |
 
-## Maintenance Principles
+## Repository Structure
 
-- prefer reusable content over one-off notes
-- keep the structure stable so new skills can be added easily
-- keep documentation direct, clear, and searchable
-- when adding a new skill, include the main specification and any necessary references
+```text
+.
+├─ skills/                    # All published skills live here
+│  └─ <skill-name>/
+│     ├─ SKILL.md             # Required: metadata + instructions
+│     ├─ references/          # Optional: docs and output templates
+│     ├─ scripts/             # Optional: executable helpers
+│     └─ assets/              # Optional: static resources
+├─ template/
+│  └─ SKILL.template.md       # Starting point for a new skill
+├─ README.md
+├─ README.zh-CN.md
+└─ LICENSE
+```
+
+## Adding a Skill
+
+1. Create `skills/<skill-name>/` and copy `template/SKILL.template.md` into it as `SKILL.md`.
+2. Fill in the frontmatter:
+   - `name` — lowercase letters, numbers and single hyphens only, max 64 chars, **must match the folder name**.
+   - `description` — what the skill does and when to use it, max 1024 chars. Include trigger keywords.
+3. Keep `SKILL.md` under ~500 lines; move long material into `references/`.
+4. Check that the CLI can discover it locally:
+
+   ```bash
+   npx skills add . --list
+   ```
+
+5. Add a row to the **Available Skills** table in both READMEs, then commit and push.
+
+Once the repository is public on GitHub, skills appear on [skills.sh](https://www.skills.sh/) automatically after they are installed via `npx skills add rockychang7/skills`.
 
 ## License
 
-This repository is licensed under the `MIT` License.
+[MIT](./LICENSE)
