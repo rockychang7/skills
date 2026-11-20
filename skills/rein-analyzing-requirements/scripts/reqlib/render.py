@@ -1,4 +1,5 @@
-"""Turning an analysis into the pages people read: brief, backend plan, release checklist.
+"""Turning an analysis into the pages people read: brief, backend plan, release checklist,
+frontend API guide.
 
 The SQL file is built in sql.py; render lists it among the pages.
 
@@ -17,6 +18,7 @@ from pathlib import Path
 from typing import Any
 
 from . import diff as diffs
+from . import openapi
 from . import sql
 from .doc import section_texts
 from .files import write_text
@@ -24,7 +26,7 @@ from .output import issue
 
 ASSETS = Path(__file__).resolve().parents[2] / "assets"
 PAGES = ("brief", "plan", "sql", "release", "frontend")
-READY = ("brief", "plan", "sql", "release")  # pages this version can generate
+READY = ("brief", "plan", "sql", "release", "frontend")  # pages this version can generate
 SECTION_REF = re.compile(r"§\s*(\d+(?:\.\d+)*)")
 
 
@@ -36,6 +38,17 @@ def fingerprint(data: Any) -> str:
     """Same content, same fingerprint, whatever the formatting."""
     text = json.dumps(data, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
     return hashlib.sha256(text.encode("utf-8")).hexdigest()
+
+
+def draft_fingerprint(analysis: Any, frontend: Any = None, contract_v: int | None = None) -> str:
+    """What a saved version stands for: the analysis, plus frontend.json and the API description when there are.
+
+    Without a frontend guide it is the analysis' own fingerprint, so versions
+    saved before frontend.json existed still match.
+    """
+    if frontend is None and contract_v is None:
+        return fingerprint(analysis)
+    return fingerprint({"analysis": analysis, "frontend": frontend, "contract": contract_v})
 
 
 def file_hash(raw: bytes) -> str:
@@ -143,6 +156,136 @@ def plan_html(
         if base and base_analysis is not None else None,
     }
     return _fill("plan", analysis, state["lang"], texts, data)
+
+
+def contract_issues(frontend: Any, spec: dict[str, Any] | None) -> list[dict[str, str]]:
+    """Each API's `contract` against the stored API description."""
+    out: list[dict[str, str]] = []
+    if not isinstance(frontend, dict):
+        return out
+    apis = [(c.get("id"), x) for c in frontend.get("clients") or [] if isinstance(c, dict)
+            for x in c.get("apis") or [] if isinstance(x, dict) and not x.get("removed")]
+    wanting = [(cid, x) for cid, x in apis if x.get("contract")]
+    if spec is None:
+        if wanting:
+            out.append(issue("frontend.no-description", "warn",
+                             "No API description is stored, so the frontend guide has no fields for %s."
+                             % ", ".join(str(x.get("id")) for _, x in wanting),
+                             hint="Store one: req.py contract --req <name> --openapi <file or URL>.",
+                             where="contract"))
+        return out
+    known = openapi.operations(spec)
+    for cid, x in wanting:
+        if openapi.operation(spec, x["contract"]) is None:
+            out.append(issue("frontend.op-missing", "error",
+                             "%s is not in the stored API description." % x["contract"],
+                             hint="Write `contract` as METHOD /path exactly as in the description (%d operations, "
+                             "e.g. %s). If the API is not in the code yet, store a newer description once it is."
+                             % (len(known), ", ".join(known[:3])),
+                             where="clients[%s].apis[%s].contract" % (cid, x.get("id"))))
+    return out
+
+
+FRONTEND_COMPARED = ("contract", "change", "facts", "frontend", "fields", "removed")
+
+
+def _frontend_clients(analysis: dict[str, Any], frontend: dict[str, Any], spec: dict[str, Any] | None,
+                      t: dict[str, str], base_analysis: dict[str, Any] | None, base_frontend: dict[str, Any] | None,
+                      base_spec: dict[str, Any] | None) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+    """Clients with each API's fields filled in, and the change marks against the base (if any)."""
+    a_apis = {x.get("id"): x for x in (analysis.get("backend") or {}).get("apis") or []}
+    compared = base_analysis is not None
+    b_apis = {x.get("id"): x for x in ((base_analysis or {}).get("backend") or {}).get("apis") or []}
+    b_fapis = {x.get("id"): x for c in (base_frontend or {}).get("clients") or [] for x in c.get("apis") or []}
+    items: dict[str, str] = {}
+    lines: dict[str, dict[str, list[str]]] = {}
+    total = 0
+    clients = []
+    for c in frontend.get("clients") or []:
+        rows = []
+        for x in c.get("apis") or []:
+            xid = x.get("id")
+            a = a_apis.get(xid) or {}
+            row = dict(x, name=a.get("name") or "", kind=a.get("kind") or "new", removed=x.get("removed") or a.get("removed"))
+            before = b_fapis.get(xid) if base_frontend is not None else b_apis.get(xid)
+            if row["removed"]:
+                if compared and before is not None and not before.get("removed"):
+                    items["api:" + xid] = "remove"
+                    total += 1
+                rows.append(row)
+                continue
+            op = openapi.operation(spec, x["contract"]) if spec is not None and x.get("contract") else None
+            if op is not None:
+                row.update(method=op["method"], path=op["path"], query=op["query"], body=op["body"],
+                           response=op["response"])
+            elif isinstance(x.get("fields"), dict):
+                row.update(params=x["fields"].get("params") or [], response=x["fields"].get("response") or [], hand=True)
+            elif x.get("contract") and spec is not None:
+                row["missing"] = x["contract"]
+            if compared:
+                if before is None:
+                    items["api:" + xid] = "add"
+                    total += 1
+                else:
+                    base_op = None
+                    if op is not None and base_spec is not None:
+                        base_op = openapi.operation(base_spec, before.get("contract") or x["contract"])
+                    found = openapi.compare(base_op, op, t) if op is not None else None
+                    if found and found["marks"]:
+                        row.update(marks=found["marks"], removed_fields=found["removed"])
+                        items["api:" + xid] = "modify"
+                        lines[xid] = {"breaking": found["breaking"], "compatible": found["compatible"]}
+                        total += len(found["marks"])
+                    elif base_frontend is not None and any(
+                            json.dumps(before.get(k), sort_keys=True, ensure_ascii=False)
+                            != json.dumps(x.get(k), sort_keys=True, ensure_ascii=False) for k in FRONTEND_COMPARED):
+                        items["api:" + xid] = "modify"
+                        total += 1
+            rows.append(row)
+        clients.append(dict(c, apis=rows))
+    return clients, {"items": items, "apis": lines, "total": total}
+
+
+def frontend_html(
+    analysis: dict[str, Any],
+    frontend: dict[str, Any],
+    state: dict[str, Any],
+    version: int,
+    generated: str,
+    texts: dict[str, Any],
+    spec: dict[str, Any] | None = None,
+    contract_v: int | None = None,
+    base: dict[str, Any] | None = None,
+    base_analysis: dict[str, Any] | None = None,
+    base_frontend: dict[str, Any] | None = None,
+    base_spec: dict[str, Any] | None = None,
+    pages: list[dict[str, Any]] | None = None,
+) -> str:
+    """The frontend API guide: per client, pages, APIs with fields from the API description, display rules."""
+    t = texts["frontend"]
+    compared = base is not None and base_analysis is not None
+    clients, marks = _frontend_clients(analysis, frontend, spec, t, base_analysis if compared else None,
+                                       base_frontend if compared else None, base_spec if compared else None)
+    notes = frontend.get("changes") or []
+    brief = [p.get("file") for p in pages or [] if p["page"] == "brief"]
+    data = {
+        "lang": state["lang"],
+        "t": t,
+        "meta": dict(_meta(state, version, generated), contract_v=contract_v),
+        "pages": pages or [],
+        "brief_file": brief[0] if brief else None,
+        "title": (analysis.get("meta") or {}).get("title", ""),
+        "code_commit": (analysis.get("meta") or {}).get("code_commit", ""),
+        "conventions": frontend.get("conventions") or [],
+        "clients": clients,
+        "error_codes": frontend.get("error_codes") or [],
+        "changes": notes,
+        "questions": open_questions(analysis),
+        "features": {f.get("id"): {"name": f.get("name"), "apis": f.get("apis") or []} for f in analysis.get("features") or []},
+        "diff": dict(marks, base=base, new_changes=len(diffs.new_notes(base_frontend or {}, frontend)))
+        if compared else None,
+    }
+    return _fill("frontend", analysis, state["lang"], texts, data)
 
 
 def open_questions(analysis: dict[str, Any]) -> list[dict[str, Any]]:

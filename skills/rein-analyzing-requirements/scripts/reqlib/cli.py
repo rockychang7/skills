@@ -251,7 +251,8 @@ def build_parser() -> argparse.ArgumentParser:
         ],
     )
     _add_req_options(p)
-    p.add_argument("--frontend", action="store_true", help="also generate the frontend API guide")
+    p.add_argument("--frontend", action="store_true",
+                   help="require frontend.json (the frontend API guide is generated whenever it exists)")
     p.add_argument(
         "--only",
         type=_csv_of(OUTPUTS),
@@ -315,15 +316,20 @@ def build_parser() -> argparse.ArgumentParser:
         sub,
         "contract",
         "store an API description for the frontend guide",
-        "Store an API description (OpenAPI JSON). render uses it to fill paths,\n"
-        "parameters and response fields in the frontend API guide.",
+        "Store a copy of the API description (OpenAPI JSON) as a new version unless\n"
+        "it is the same as the last one. render takes each API's paths, parameters\n"
+        "and response fields from the latest copy, and marks field changes against\n"
+        "the copy an earlier version used. Reports contracts in frontend.json that\n"
+        "the description does not have.",
         [
             "contract --req activity-signup --openapi openapi.json",
             "contract --req activity-signup --openapi http://localhost:8080/v3/api-docs",
+            "contract --req activity-signup",
         ],
     )
     _add_req_options(p)
-    p.add_argument("--openapi", required=True, metavar="FILE_OR_URL", help="OpenAPI JSON file or URL")
+    p.add_argument("--openapi", metavar="FILE_OR_URL",
+                   help="OpenAPI JSON file or URL (default: `openapi` in .req-profile.json)")
 
     p = _add_command(
         sub,

@@ -8,6 +8,15 @@ API names and kinds come from the analysis by ID.
 Write it once the API's inputs and outputs exist in code; the logic can still
 be unfinished. For a complete sample run `req.py example frontend`.
 
+Store the API description with `req.py contract --req <name> --openapi <file
+or URL>` (Spring Boot with springdoc: `/v3/api-docs`; FastAPI:
+`/openapi.json`). Run it again
+whenever the APIs change: each new copy is a version, and the guide marks
+field changes against the copy an earlier version used, and lists what
+breaks old frontend code (a field going away or removed, a new type, a new
+required parameter, new values). `contract` and `check --frontend` report a
+`contract` the description does not have (`frontend.op-missing`).
+
 ## Contents
 
 - [Top level](#top-level)

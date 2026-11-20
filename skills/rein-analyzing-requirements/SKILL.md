@@ -21,7 +21,7 @@ never write a page or SQL by hand.
 - `render` wrote every file the requirement needs (`files` in its result): the
   brief always; the backend plan when there are APIs; the SQL file when tables
   or rows change; the release checklist when there is SQL, a config or a
-  `release` item.
+  `release` item; the frontend API guide when `frontend.json` exists.
 - Every document section in `sections` is cited (itself or one of its
   subsections) or listed in `skipped_sections`, and every rule taken from the
   document cites its section.
@@ -54,7 +54,8 @@ from the project directory so that it finds the project settings.
 | Owners or status: text copied with the backend plan's "copy plan" button, or said in chat | Write them into those `backend.apis` items (owner, status); no `changes` entry, they are progress, not requirement changes; then `check` and `render` |
 | The user wants to see what changed since an earlier version | `render --since <version>` |
 | The SQL ran in an environment ("test ran it") | `applied --env <env> --v <version>`, then `render`. The version is on the first line of the SQL file that ran; if the user does not know which file, ask: a wrong version gives that environment the wrong statements |
-| The document changed; send the files; frontend guide | Not available in this version: tell the user. A copy written by hand would drift from the analysis |
+| The APIs exist in code and the user wants the frontend guide | Write `frontend.json` by `references/frontend.md`; store the API description with `contract --req <name> --openapi <file or URL>` (again whenever the APIs change); `check --frontend`; `render` |
+| The document changed; send the files | Not available in this version: tell the user. A copy written by hand would drift from the analysis |
 
 ## New requirement
 
@@ -148,5 +149,7 @@ Tell the user in plain words, in this order:
    them back; on the backend plan, whoever schedules the work can set owners
    and status and press "copy plan"; on the release checklist, whoever
    releases picks the environment, copies what to run and ticks each step.
+   The frontend API guide opens on one client with `?client=<id>` after the
+   file name; send each frontend team its own link.
 4. Anything you decided for them: the short name, sections you skipped and
    why.

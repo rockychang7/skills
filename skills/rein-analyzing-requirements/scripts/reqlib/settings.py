@@ -112,6 +112,14 @@ class Settings:
         value = self.profile.get("config_center")
         return value.strip() if isinstance(value, str) and value.strip() else None
 
+    def openapi(self) -> str | None:
+        """Where the project's API description is: a URL, or a path relative to the project root."""
+        value = self.profile.get("openapi")
+        if not isinstance(value, str) or not value.strip():
+            return None
+        value = value.strip()
+        return value if value.startswith(("http://", "https://")) else str((self.root / value).resolve())
+
     def resolve(self, value: str) -> Path:
         return (self.cwd / Path(value).expanduser()).resolve()
 

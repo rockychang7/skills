@@ -8,6 +8,7 @@ import json
 from pathlib import Path
 
 from . import example as ex
+from . import openapi
 from . import render
 from . import sql
 from .check import check_analysis, check_frontend
@@ -209,7 +210,7 @@ def cmd_check(args: argparse.Namespace) -> int:
     if args.frontend:
         path = folder / "frontend.json"
         data = _read_source(path, "Write it first; see the format with: %s example frontend" % RUN)
-        issues = check_frontend(data, analysis)
+        issues = check_frontend(data, analysis) + render.contract_issues(data, _contract(folder, state)[0])
     else:
         path = analysis_path
         doc = latest_doc(folder, state)
@@ -243,16 +244,42 @@ def _version_loader(folder: Path, state: dict):
     return load
 
 
-def _save_version(folder: Path, state: dict, analysis: object, raw: str) -> tuple[dict, bool]:
-    """Store the analysis as a new version unless it equals the latest one."""
+def _frontend(folder: Path, required: bool) -> object:
+    """frontend.json, or None when it is not written and not required."""
+    path = folder / "frontend.json"
+    if not path.is_file() and not required:
+        return None
+    return _read_source(path, "Write it by references/frontend.md; see the format with: %s example frontend" % RUN)
+
+
+def _contract(folder: Path, state: dict, v: object = None) -> tuple[object, object]:
+    """(stored API description, its version): the latest, or version `v`; (None, None) when there is none."""
+    contracts = state.get("contracts") or []
+    found = [c for c in contracts if c["v"] == v] if v is not None else contracts[-1:]
+    if not found:
+        return None, None
+    return json.loads((folder / found[0]["file"]).read_text(encoding="utf-8-sig")), found[0]["v"]
+
+
+def _save_version(folder: Path, state: dict, analysis: object, raw: str, frontend: object = None,
+                  frontend_raw: str = "", contract_v: object = None) -> tuple[dict, bool]:
+    """Store the drafts as a new version unless they equal the latest one.
+
+    A version is the analysis, plus frontend.json and the API description version when there are.
+    """
     versions = state.setdefault("versions", [])
-    digest = render.fingerprint(analysis)
+    digest = render.draft_fingerprint(analysis, frontend, contract_v)
     if versions and versions[-1].get("sha256") == digest:
         return versions[-1], False
     v = len(versions) + 1
     entry = {"v": v, "file": "versions/analysis-v%d.json" % v, "at": _now().isoformat(), "doc_v": len(state["docs"]),
              "sha256": digest}
     write_text(folder / entry["file"], raw)
+    if frontend is not None:
+        entry["frontend"] = "versions/frontend-v%d.json" % v
+        write_text(folder / entry["frontend"], frontend_raw)
+    if contract_v is not None:
+        entry["contract_v"] = contract_v
     versions.append(entry)
     return entry, True
 
@@ -263,8 +290,12 @@ def cmd_render(args: argparse.Namespace) -> int:
     analysis = _read_source(analysis_path, "Write it first; see the format with: %s example" % RUN)
     doc_text = latest_doc(folder, state).read_text(encoding="utf-8")
     load_version = _version_loader(folder, state)
+    frontend = _frontend(folder, args.frontend)
+    spec, contract_v = _contract(folder, state)
     issues = check_analysis(analysis, {s.id for s in parse_sections(doc_text)}, settings.envs())
     issues += sql.problems(analysis, state, load_version)
+    if frontend is not None:
+        issues += check_frontend(frontend, analysis) + render.contract_issues(frontend, spec)
     if any(i["level"] in ("error", "confirm") for i in issues):
         return finish("render", issues, limit=ISSUE_LIMIT, id=state["id"], rendered=False,
                       summary=summarize(issues))
@@ -278,11 +309,14 @@ def cmd_render(args: argparse.Namespace) -> int:
         base_analysis = load_version(args.since)
         base = {"kind": "version", "v": args.since}
 
-    entry, created = _save_version(folder, state, analysis, analysis_path.read_text(encoding="utf-8-sig"))
+    entry, created = _save_version(folder, state, analysis, analysis_path.read_text(encoding="utf-8-sig"), frontend,
+                                   (folder / "frontend.json").read_text(encoding="utf-8-sig") if frontend is not None else "",
+                                   contract_v)
     generated = entry["at"].replace("T", " ")[:16]
-    wanted = list(args.only) if args.only else render.pages_needed(analysis, args.frontend)
-    if args.frontend and "frontend" not in wanted:
-        wanted.append("frontend")
+    wanted = list(args.only) if args.only else render.pages_needed(analysis, frontend is not None)
+    if "frontend" in wanted and frontend is None:
+        raise Stop(issue("frontend.missing", "error", "frontend.json has not been written yet.",
+                         hint="Write it by references/frontend.md once the APIs exist in code.", where="--only"))
     texts = render.load_texts(state["lang"])
     making = [p for p in wanted if p in render.READY]
     not_yet = [p for p in wanted if p not in render.READY]
@@ -293,7 +327,7 @@ def cmd_render(args: argparse.Namespace) -> int:
         names["sql"] = next(iter(sql_files.values()))
     # Each page lists the requirement's pages: the ones it needs, plus any generated earlier.
     exists = {p for p in render.PAGES if (folder / "out" / names[p]).is_file()}
-    needed = render.pages_needed(analysis, args.frontend)
+    needed = render.pages_needed(analysis, frontend is not None)
     shown = [p for p in render.PAGES if p in needed or p in wanted or p in exists]
     linked = exists | set(making)
     files: list = []
@@ -311,6 +345,16 @@ def cmd_render(args: argparse.Namespace) -> int:
         elif page == "plan":
             write(page, names[page], render.plan_html(analysis, state, entry["v"], generated, texts, base,
                                                       base_analysis, pages))
+        elif page == "frontend":
+            base_frontend = base_spec = None
+            if base is not None:
+                at = [v for v in state["versions"] if v["v"] == args.since][0]
+                if at.get("frontend") and (folder / at["frontend"]).is_file():
+                    base_frontend = json.loads((folder / at["frontend"]).read_text(encoding="utf-8-sig"))
+                base_spec = _contract(folder, state, at["contract_v"])[0] if at.get("contract_v") else None
+            write(page, names[page], render.frontend_html(
+                analysis, frontend, state, entry["v"], generated, texts, spec, contract_v, base, base_analysis,
+                base_frontend, base_spec, pages))
         elif page == "release":
             rows = sql.release_rows(analysis, state, settings.envs(), entry["v"], load_version, texts, sql_files)
             write(page, names[page], render.release_html(
@@ -328,6 +372,36 @@ def cmd_render(args: argparse.Namespace) -> int:
                   new_version=created, compared_with=base, files=files, not_yet=not_yet)
 
 
+def cmd_contract(args: argparse.Namespace) -> int:
+    settings, folder, state = _requirement(args)
+    source = args.openapi or settings.openapi()
+    if not source:
+        raise Stop(issue("contract.no-source", "error", "Where is the API description?",
+                         hint="Pass --openapi <file or URL>, or ask the user and save it as `openapi` in "
+                         ".req-profile.json (Spring Boot with springdoc: http://localhost:8080/v3/api-docs).",
+                         where="--openapi"))
+    if not source.startswith(("http://", "https://")):
+        source = str(settings.resolve(source))
+    spec = openapi.load(source)
+    digest = render.fingerprint(spec)
+    contracts = state.setdefault("contracts", [])
+    if contracts and contracts[-1].get("sha256") == digest:
+        entry, created = contracts[-1], False
+    else:
+        v = len(contracts) + 1
+        entry = {"v": v, "file": "source/openapi-v%d.json" % v, "at": _now().isoformat(), "from": source,
+                 "sha256": digest}
+        write_text(folder / entry["file"], json.dumps(spec, ensure_ascii=False, indent=2) + "\n")
+        contracts.append(entry)
+        created = True
+        save_state(folder, state)
+    frontend = _frontend(folder, False)
+    issues = render.contract_issues(frontend, spec) if frontend is not None else []
+    note("Render again so the frontend guide takes its fields from this description.")
+    return finish("contract", issues, id=state["id"], v=entry["v"], new_version=created, file=str(folder / entry["file"]),
+                  operations=len(openapi.operations(spec)))
+
+
 def cmd_status(args: argparse.Namespace) -> int:
     settings, folder, state = _requirement(args)
     workspace, chosen_by = settings.workspace(args.dir)
@@ -339,7 +413,14 @@ def cmd_status(args: argparse.Namespace) -> int:
         analysis = None
     doc = latest_doc(folder, state)
     sections = {s.id for s in parse_sections(doc.read_text(encoding="utf-8"))}
-    fields, issues = report(folder, state, analysis, settings.envs(), sections, _version_loader(folder, state))
+    try:
+        frontend = read_json(folder / "frontend.json", "frontend")
+    except JsonProblem as e:
+        if not e.issue["code"].endswith(".missing"):
+            raise Stop(e.issue, exit_code=1, file=str(folder / "frontend.json"))
+        frontend = None
+    fields, issues = report(folder, state, analysis, settings.envs(), sections, _version_loader(folder, state),
+                            frontend, _contract(folder, state)[1])
     return finish("status", issues, id=state["id"], dir=str(folder), lang=state["lang"],
                   workspace={"dir": str(workspace), "from": chosen_by}, up_to_date=not issues, **fields)
 
@@ -384,6 +465,7 @@ HANDLERS = {
     "check": cmd_check,
     "render": cmd_render,
     "applied": cmd_applied,
+    "contract": cmd_contract,
     "status": cmd_status,
     "example": cmd_example,
 }

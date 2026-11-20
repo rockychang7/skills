@@ -16,11 +16,12 @@ from .output import issue, summarize
 RUN = "req.py"
 
 
-def _pages(folder: Path, state: dict[str, Any], analysis: dict[str, Any], latest: int | None) -> list[dict[str, Any]]:
+def _pages(folder: Path, state: dict[str, Any], analysis: dict[str, Any], latest: int | None,
+           frontend: bool) -> list[dict[str, Any]]:
     """Every generated file the analysis needs, with its state: current, outdated, edited or missing."""
     texts = render.load_texts(state["lang"])
     names: list[tuple[str, str]] = []
-    for page in render.pages_needed(analysis, False):
+    for page in render.pages_needed(analysis, frontend):
         if page not in render.READY:
             continue
         if page == "sql":
@@ -51,8 +52,10 @@ def report(
     envs: list[str],
     sections: set[str],
     load_version: Callable[[int], dict[str, Any]],
+    frontend: Any = None,
+    contract_v: int | None = None,
 ) -> tuple[dict[str, Any], list[dict[str, str]]]:
-    """(fields, issues) for the status result."""
+    """(fields, issues) for the status result. `frontend` is frontend.json (None: not written)."""
     issues: list[dict[str, str]] = []
     docs = state.get("docs") or []
     versions = state.get("versions") or []
@@ -66,13 +69,14 @@ def report(
                             where="analysis.json"))
         return fields, issues
 
-    saved = last is not None and last.get("sha256") == render.fingerprint(analysis)
+    saved = last is not None and last.get("sha256") == render.draft_fingerprint(analysis, frontend, contract_v)
     fields["analysis"] = {"exists": True, "version": last["v"] if last else None, "rendered": saved,
                           "doc_v": last.get("doc_v") if last else None}
     if not saved:
         issues.append(issue(
             "status.not-rendered", "warn",
-            "analysis.json has changes that are not rendered yet." if last else "analysis.json has never been rendered.",
+            "The analysis, frontend.json or the API description changed since the last render." if last
+            else "analysis.json has never been rendered.",
             hint="Run check, then render. Until then the pages show %s." % (
                 "version %d" % last["v"] if last else "nothing"),
             where="analysis.json"))
@@ -95,7 +99,7 @@ def report(
             hint="Fix every rule, API, table and release item each one affects, then set its status to `applied` "
             "(references/questions.md, \"When answers arrive\").", where="questions"))
 
-    pages = _pages(folder, state, analysis, last["v"] if last else None)
+    pages = _pages(folder, state, analysis, last["v"] if last else None, frontend is not None)
     fields["pages"] = pages
     for p in pages:
         name = Path(p["file"]).name
