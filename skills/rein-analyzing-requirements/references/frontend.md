@@ -6,7 +6,7 @@ description (OpenAPI), filled in by the script through each API's `contract`.
 API names and kinds come from the analysis by ID.
 
 Write it once the API's inputs and outputs exist in code; the logic can still
-be unfinished. For a complete sample run `python3 scripts/req.py example frontend`.
+be unfinished. For a complete sample run `req.py example frontend`.
 
 ## Contents
 

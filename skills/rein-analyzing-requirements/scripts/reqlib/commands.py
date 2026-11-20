@@ -16,7 +16,8 @@ from .output import Stop, finish, issue, note, summarize
 from .settings import LANGS, Settings, guard_not_in_skill_folder, workspace_suggestions
 from .store import by_name, check_name, find, latest_doc, load_state, save_state
 
-RUN = "python3 scripts/req.py"
+# How hints name the script; SKILL.md defines `req.py` as the full command.
+RUN = "req.py"
 ISSUE_LIMIT = 50
 
 
@@ -63,8 +64,8 @@ def cmd_new(args: argparse.Namespace) -> int:
                     "req.exists",
                     "warn",
                     "Requirement %r already exists; nothing was changed." % args.name,
-                    hint="To store a new version of its document, use refresh. To start a separate "
-                    "requirement, pick another short name.",
+                    hint="Ask the user: continue it (pass --req %s to later commands), or start a separate "
+                    "requirement under another short name." % args.name,
                     where="--name",
                 )
             ],

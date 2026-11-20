@@ -2,7 +2,7 @@
 
 The analysis is the one source every page and SQL file is generated from.
 Write facts in plain business language; the script does all layout.
-For a complete sample run `python3 scripts/req.py example`.
+For a complete sample run `req.py example`.
 
 ## Contents
 
@@ -228,7 +228,7 @@ Which question blocks an API is worked out from `questions[].affects`.
 
 Changing a table after an environment ran its SQL:
 
-- Before any environment ran it (`req.py status` shows this), just edit `sql`.
+- Before any environment ran it, just edit `sql`.
 - Afterwards, do both: update `sql` to the full latest statement (for
   environments that never ran it), **and** append the matching `ALTER` to
   `patches` (for environments that did). Never edit or remove an existing patch.

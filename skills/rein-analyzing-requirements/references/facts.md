@@ -1,7 +1,7 @@
 # Where to find the facts
 
-If the project settings name a `facts` file (`references/profile.md`), read it
-first: it describes this project and comes before this list. What you cannot
+If `.req-profile.json` names a `facts` file, read it first: it describes this
+project and comes before this list. What you cannot
 find becomes a question; never guess. Only read: run no write queries,
 migrations or deploys.
 

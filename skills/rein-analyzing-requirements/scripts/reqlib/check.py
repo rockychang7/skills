@@ -114,6 +114,11 @@ RELEASE_ID = re.compile(r"^R\d+$")
 GUIDE_ID = re.compile(r"^G\d+$")
 SECTION_REF = re.compile(r"§\s*(\d+(?:\.\d+)*)")
 WHERE_CLAUSE = re.compile(r"\bwhere\b", re.IGNORECASE)
+# Technical words that should not reach the brief, which product, frontend
+# and backend all read: routes ("POST /order/review", "/order/list") and
+# snake_case table names. Paths inside URLs do not count.
+ROUTE = re.compile(r"\b(?:GET|POST|PUT|PATCH|DELETE)\s+/\S*|(?<![\w.:/])/[A-Za-z][\w-]*(?:/[\w{}:-]+)+")
+ACCEPTANCE_COLON = re.compile(r"^.+?[：:]\s*.+$")
 TYPE_NAMES = {"str": "a string", "int": "a whole number", "bool": "true or false", "strs": "a list of strings",
               "map": "an object of plain values", "rows": "a list of rows (lists of strings)"}
 
@@ -326,6 +331,14 @@ def check_analysis(a: Any, sections: set[str], envs: list[str]) -> list[dict[str
                     asked.setdefault(q, []).append(fid)
             if q and q not in question_ids:
                 out.add("ref.unknown", "error", rw + ".q", "Question %s is not in questions." % q)
+        for i, example in enumerate(_strs(f.get("acceptance"))):
+            if not ACCEPTANCE_COLON.match(example):
+                out.add("acceptance.no-colon", "warn", "%s.acceptance[%d]" % (where, i),
+                        "Acceptance example is not written as situation：expected result.",
+                        hint="The brief splits it at the first colon into two columns, "
+                        "e.g. \"离开始 23 小时取消：按钮置灰，提示不能取消\".")
+
+    _check_brief_words(a, [n for n in table_names if "_" in n], out)
 
     for x in apis:
         xid = _text(x, "id")
@@ -410,6 +423,33 @@ def check_analysis(a: Any, sections: set[str], envs: list[str]) -> list[dict[str
                         hint="Use the section IDs listed by new/refresh.")
 
     return _apply_confirmations(out.items, _dicts(a.get("confirmations")))
+
+
+def _brief_texts(a: dict[str, Any]) -> Iterator[tuple[str, str]]:
+    """(where, text) for the text the brief shows that people of every role read."""
+    for fw in _dicts(a.get("flows")):
+        for step in _dicts(fw.get("steps")):
+            yield "flows[%s].steps[%s].text" % (_text(fw, "id"), _text(step, "id")), _text(step, "text")
+    for f in _dicts(a.get("features")):
+        where = "features[%s]" % _text(f, "id")
+        yield where + ".summary", _text(f, "summary")
+        for i, rule in enumerate(_dicts(f.get("rules"))):
+            yield "%s.rules[%d].text" % (where, i), _text(rule, "text")
+        for key in ("acceptance", "impact"):
+            for i, line in enumerate(_strs(f.get(key))):
+                yield "%s.%s[%d]" % (where, key, i), line
+    for q in _dicts(a.get("questions")):
+        yield "questions[%s].title" % _text(q, "id"), _text(q, "title")
+
+
+def _check_brief_words(a: dict[str, Any], tables: list[str], out: Issues) -> None:
+    table_word = re.compile(r"(?<![\w.])(%s)(?![\w])" % "|".join(map(re.escape, tables))) if tables else None
+    for where, text in _brief_texts(a):
+        found = ROUTE.findall(text) + (table_word.findall(text) if table_word else [])
+        if found:
+            out.add("text.tech-term", "warn", where, "Technical words in text the brief shows: %s." % ", ".join(found),
+                    hint="Product, frontend and backend all read the brief: say it in business words "
+                    "(the page and action, the thing it stores). Routes and tables belong in backend.")
 
 
 def flow_edges(steps: list[dict[str, Any]]) -> list[tuple[str, str, str, int]]:

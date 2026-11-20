@@ -2,8 +2,7 @@
 
 A question is anything the document leaves unclear, contradicts, or that
 clashes with the code. You never decide these; the product owner picks an
-answer on the brief. Fields and statuses are in `references/analysis.md`
-(questions).
+answer on the brief.
 
 ## Where questions hide
 
