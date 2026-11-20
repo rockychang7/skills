@@ -9,6 +9,7 @@ from pathlib import Path
 
 from . import example as ex
 from . import render
+from . import sql
 from .check import check_analysis, check_frontend
 from .doc import duplicate_ids, parse_sections, read_doc
 from .files import JsonProblem, read_json, write_text
@@ -213,6 +214,7 @@ def cmd_check(args: argparse.Namespace) -> int:
         doc = latest_doc(folder, state)
         sections = {s.id for s in parse_sections(doc.read_text(encoding="utf-8"))}
         issues = check_analysis(analysis, sections, settings.envs())
+        issues += sql.problems(analysis, state, _version_loader(folder, state))
     return finish(
         "check",
         issues,
@@ -221,6 +223,23 @@ def cmd_check(args: argparse.Namespace) -> int:
         file=str(path),
         summary=summarize(issues),
     )
+
+
+def _version_loader(folder: Path, state: dict):
+    """A function returning the saved analysis of a version; unknown versions stop the command."""
+    files = {v["v"]: v["file"] for v in state.get("versions", [])}
+    cache: dict = {}
+
+    def load(v: int) -> dict:
+        if v not in cache:
+            if v not in files or not (folder / files[v]).is_file():
+                have = ", ".join(str(n) for n in files) or "none yet"
+                raise Stop(issue("version.missing", "error", "Analysis version %d is not saved." % v,
+                                 hint="Saved versions: %s." % have, where="state.json"))
+            cache[v] = json.loads((folder / files[v]).read_text(encoding="utf-8-sig"))
+        return cache[v]
+
+    return load
 
 
 def _save_version(folder: Path, state: dict, analysis: object, raw: str) -> tuple[dict, bool]:
@@ -242,19 +261,20 @@ def cmd_render(args: argparse.Namespace) -> int:
     analysis_path = folder / "analysis.json"
     analysis = _read_source(analysis_path, "Write it first; see the format with: %s example" % RUN)
     doc_text = latest_doc(folder, state).read_text(encoding="utf-8")
+    load_version = _version_loader(folder, state)
     issues = check_analysis(analysis, {s.id for s in parse_sections(doc_text)}, settings.envs())
+    issues += sql.problems(analysis, state, load_version)
     if any(i["level"] in ("error", "confirm") for i in issues):
         return finish("render", issues, limit=ISSUE_LIMIT, id=state["id"], rendered=False,
                       summary=summarize(issues))
 
     base, base_analysis = None, None
     if args.since is not None:
-        found = [v for v in state.get("versions", []) if v["v"] == args.since]
-        if not found:
+        if not any(v["v"] == args.since for v in state.get("versions", [])):
             have = ", ".join(str(v["v"]) for v in state.get("versions", [])) or "none yet"
             raise Stop(issue("render.bad-since", "error", "There is no analysis version %d." % args.since,
                              hint="Saved versions: %s." % have, where="--since"))
-        base_analysis = json.loads((folder / found[0]["file"]).read_text(encoding="utf-8"))
+        base_analysis = load_version(args.since)
         base = {"kind": "version", "v": args.since}
 
     entry, created = _save_version(folder, state, analysis, analysis_path.read_text(encoding="utf-8-sig"))
@@ -265,27 +285,69 @@ def cmd_render(args: argparse.Namespace) -> int:
     texts = render.load_texts(state["lang"])
     making = [p for p in wanted if p in render.READY]
     not_yet = [p for p in wanted if p not in render.READY]
+    # One SQL file per database; pages link to the first.
+    sql_files = sql.file_names(analysis, texts["files"]["sql"])
+    names = {p: texts["files"][p] for p in render.PAGES}
+    if sql_files:
+        names["sql"] = next(iter(sql_files.values()))
     # Each page lists the requirement's pages: the ones it needs, plus any generated earlier.
-    exists = {p for p in render.PAGES if (folder / "out" / texts["files"][p]).is_file()}
+    exists = {p for p in render.PAGES if (folder / "out" / names[p]).is_file()}
     needed = render.pages_needed(analysis, args.frontend)
     shown = [p for p in render.PAGES if p in needed or p in wanted or p in exists]
     linked = exists | set(making)
-    files = []
+    files: list = []
+
+    def write(page: str, name: str, content: str, **extra: str) -> None:
+        result, page_issues = render.write_page(folder, name, content, state, entry["v"], args.force)
+        files.append(dict(result, page=page, **extra))
+        issues.extend(page_issues)
+
     for page in making:
-        pages = render.page_list(texts, shown, linked, page)
+        pages = render.page_list(texts, shown, linked, page, names)
         if page == "brief":
-            content = render.brief_html(analysis, state, entry["v"], generated, doc_text, texts, base, base_analysis,
-                                        pages)
+            write(page, names[page], render.brief_html(analysis, state, entry["v"], generated, doc_text, texts, base,
+                                                       base_analysis, pages))
+        elif page == "plan":
+            write(page, names[page], render.plan_html(analysis, state, entry["v"], generated, texts, base,
+                                                      base_analysis, pages))
         else:
-            content = render.plan_html(analysis, state, entry["v"], generated, texts, base, base_analysis, pages)
-        result, page_issues = render.write_page(folder, texts["files"][page], content, state, entry["v"], args.force)
-        files.append(dict(result, page=page))
-        issues += page_issues
+            for db, name in sql_files.items():
+                content = sql.build(analysis, db, entry["v"], generated, state["id"], state, settings.envs(),
+                                    load_version, texts)
+                write(page, name, content, db=db)
     save_state(folder, state)
     if not_yet:
         note("Not generated yet (coming in later versions of this skill): %s." % ", ".join(not_yet))
     return finish("render", issues, limit=ISSUE_LIMIT, id=state["id"], rendered=True, version=entry["v"],
                   new_version=created, compared_with=base, files=files, not_yet=not_yet)
+
+
+def cmd_applied(args: argparse.Namespace) -> int:
+    settings, folder, state = _requirement(args)
+    versions = [v["v"] for v in state.get("versions", [])]
+    if args.v not in versions:
+        raise Stop(issue("applied.bad-version", "error", "There is no analysis version %d." % args.v,
+                         hint="Saved versions: %s. The version is on the first line of the SQL file that was run; "
+                         "if the user does not know which file, ask." % (", ".join(map(str, versions)) or "none yet"),
+                         where="--v"))
+    envs = settings.envs()
+    if args.env not in envs:
+        raise Stop(issue("applied.unknown-env", "error", "Environment %r is not in the project settings." % args.env,
+                         hint="Known environments: %s. Use one of them, or ask the user before adding it to `envs` "
+                         "in .req-profile.json." % ", ".join(envs), where="--env"))
+    applied = state.setdefault("applied", {})
+    before = (applied.get(args.env) or {}).get("v")
+    issues = []
+    if before is not None and before > args.v:
+        issues.append(issue("applied.backwards", "warn",
+                            "%s was recorded at version %d and is now set back to %d." % (args.env, before, args.v),
+                            hint="Right only if the database was restored to an older state; otherwise record the "
+                            "version again.", where="--env"))
+    applied[args.env] = {"v": args.v, "at": _now().isoformat()}
+    save_state(folder, state)
+    note("Render again so the SQL file shows what each environment still needs.")
+    return finish("applied", issues, id=state["id"], env=args.env, v=args.v, previous=before,
+                  applied={e: r["v"] for e, r in applied.items()})
 
 
 def cmd_example(args: argparse.Namespace) -> int:
@@ -299,5 +361,6 @@ HANDLERS = {
     "config set": cmd_config_set,
     "check": cmd_check,
     "render": cmd_render,
+    "applied": cmd_applied,
     "example": cmd_example,
 }

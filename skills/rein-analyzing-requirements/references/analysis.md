@@ -232,8 +232,11 @@ Changing a table after an environment ran its SQL:
 - Afterwards, do both: update `sql` to the full latest statement (for
   environments that never ran it), **and** append the matching `ALTER` to
   `patches` (for environments that did). Never edit or remove an existing patch.
-- The script knows which version added each patch and gives each environment
-  only the patches it has not run yet.
+- Which environment ran which version is recorded with `applied`. From that,
+  the SQL file gives each environment only what it has not run yet, and
+  `check` reports `sql.patch-missing` when a table changed with no new patch.
+- The same holds for `data`: once an environment ran a change, leave that
+  entry as it is and add a new entry for any further change.
 
 ## backend.data, configs, risks
 

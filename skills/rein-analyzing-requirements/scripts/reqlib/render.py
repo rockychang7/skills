@@ -1,5 +1,7 @@
 """Turning an analysis into the pages people read: the brief and the backend plan so far.
 
+The SQL file is built in sql.py; render only lists it among the pages.
+
 A page is one HTML template (assets/templates) plus a JSON blob of data; the
 browser draws the page from the data. Text on the page comes from the language
 table (assets/i18n/<lang>.json), so the same template serves every language.
@@ -15,13 +17,14 @@ from pathlib import Path
 from typing import Any
 
 from . import diff as diffs
+from . import sql
 from .doc import section_texts
 from .files import write_text
 from .output import issue
 
 ASSETS = Path(__file__).resolve().parents[2] / "assets"
 PAGES = ("brief", "plan", "sql", "release", "frontend")
-READY = ("brief", "plan")  # pages this version can generate
+READY = ("brief", "plan", "sql")  # pages this version can generate
 SECTION_REF = re.compile(r"§\s*(\d+(?:\.\d+)*)")
 
 
@@ -44,7 +47,7 @@ def pages_needed(analysis: dict[str, Any], frontend: bool) -> list[str]:
     needed = ["brief"]
     if backend.get("apis"):
         needed.append("plan")
-    if backend.get("tables") or backend.get("data"):
+    if sql.databases(analysis):
         needed.append("sql")
     if backend.get("tables") or backend.get("data") or backend.get("configs") or analysis.get("release"):
         needed.append("release")
@@ -53,15 +56,19 @@ def pages_needed(analysis: dict[str, Any], frontend: bool) -> list[str]:
     return needed
 
 
-def page_list(texts: dict[str, Any], shown: list[str], linked: set[str], current: str) -> list[dict[str, Any]]:
-    """The requirement's pages as each page's rail lists them; only `linked` ones get a link."""
+def page_list(texts: dict[str, Any], shown: list[str], linked: set[str], current: str,
+              names: dict[str, str] | None = None) -> list[dict[str, Any]]:
+    """The requirement's pages as each page's rail lists them; only `linked` ones get a link.
+
+    `names` overrides file names (the SQL file of a named database).
+    """
     out = []
     for page in shown:
         entry: dict[str, Any] = {"page": page, "label": texts["pages"][page]}
         if page == current:
             entry["current"] = True
         elif page in linked:
-            entry["file"] = texts["files"][page]
+            entry["file"] = (names or {}).get(page) or texts["files"][page]
         out.append(entry)
     return out
 

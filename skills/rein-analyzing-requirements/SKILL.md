@@ -18,8 +18,8 @@ never write a page or SQL by hand.
 ## Done when
 
 - `check` reports no `error`, and every `confirm` item was asked and recorded.
-- `render` wrote the brief, and the backend plan when there are APIs (`files`
-  in its result).
+- `render` wrote the brief, plus the backend plan when there are APIs and the
+  SQL file when tables or rows change (`files` in its result).
 - Every document section in `sections` is cited (itself or one of its
   subsections) or listed in `skipped_sections`, and every rule taken from the
   document cites its section.
@@ -50,7 +50,8 @@ from the project directory so that it finds the project settings.
 | The user asks to change the analysis (add a feature, fix a rule) | Edit `analysis.json`; once the brief has been rendered, add a `changes` entry; then `check` and `render` |
 | Owners or status: text copied with the backend plan's "copy plan" button, or said in chat | Write them into those `backend.apis` items (owner, status); no `changes` entry, they are progress, not requirement changes; then `check` and `render` |
 | The user wants to see what changed since an earlier version | `render --since <version>` |
-| The document changed; send the files; SQL, release checklist, frontend guide | Not available in this version: tell the user. A copy written by hand would drift from the analysis |
+| The SQL ran in an environment ("test ran it") | `applied --env <env> --v <version>`, then `render`. The version is on the first line of the SQL file that ran; if the user does not know which file, ask: a wrong version gives that environment the wrong statements |
+| The document changed; send the files; release checklist, frontend guide | Not available in this version: tell the user. A copy written by hand would drift from the analysis |
 
 ## New requirement
 
@@ -127,6 +128,7 @@ from the project directory so that it finds the project settings.
 | A `modify` API whose route you cannot find | Search again (`references/facts.md`). Truly missing: it is `new`. Unsure: write a question |
 | Deleting, splitting or renumbering an item after a render | IDs never change: keep the item with `removed` and a reason; a split-off part takes a new ID |
 | Writing the analysis in English because this skill is in English | Write what people read in `lang` from `new`; code names stay as they are |
+| Changing a table after some environment ran its SQL | Keep `sql` the full latest statement and append the change to `patches`; never edit an old patch. Otherwise that environment cannot catch up (`sql.patch-missing`) |
 | A page looks wrong, or SQL is needed | Edit `analysis.json` and render again; never edit generated files |
 
 ## Output
