@@ -53,7 +53,8 @@ from the project directory so that it finds the project settings.
 | The user asks to change the analysis (add a feature, fix a rule) | Edit `analysis.json`; once the brief has been rendered, add a `changes` entry; then `check` and `render` |
 | Owners or status: text copied with the backend plan's "copy plan" button, or said in chat | Write them into those `backend.apis` items (owner, status); no `changes` entry, they are progress, not requirement changes; then `check` and `render` |
 | The user wants to see what changed since an earlier version | `render --since <version>` |
-| The SQL ran in an environment ("test ran it") | `applied --env <env> --v <version>`, then `render`. The version is on the first line of the SQL file that ran; if the user does not know which file, ask: a wrong version gives that environment the wrong statements |
+| The user wants to release, or bring an environment up to date (text copied with the release checklist's "hand it to an AI" box) | `steps --req <name> --env <env>` says what that environment needs and how to check each step, not how. Carry each step out with the tools this session has (another skill or command that submits SQL, changes configs, deploys); check it as the step says. Nothing to do it with: give the user the steps; the release checklist has them ready to copy |
+| An environment's tables now have the changes ("test has it", or you just applied them) | `applied --env <env> --v <version>`, then `render`. The version is on the first line of the SQL file used; if the user does not know which file, ask: a wrong version gives that environment the wrong statements |
 | The APIs exist in code and the user wants the frontend guide | Write `frontend.json` by `references/frontend.md`; store the API description with `contract --req <name> --openapi <file or URL>` (again whenever the APIs change); `check --frontend`; `render` |
 | The document changed; send the files | Not available in this version: tell the user. A copy written by hand would drift from the analysis |
 
@@ -112,6 +113,9 @@ from the project directory so that it finds the project settings.
 - **`render` reports `render.kept-manual`.** Someone edited the page by hand.
   Ask whether those edits matter: copy what matters into `analysis.json` and
   render again, or render with `--force` to replace the page.
+- **Before changing an environment** (running SQL, setting a config,
+  deploying): say what you are about to do and where, and wait for a yes.
+  Production always; others unless the user already said to go ahead.
 - **The document cannot be read whole** (needs a login, Word or PDF you
   cannot convert, images you cannot see, sections that are empty): ask the
   user for an export. An analysis of part of a document looks complete and
@@ -148,7 +152,8 @@ Tell the user in plain words, in this order:
    brief, the product owner can pick answers and press "copy answers" to send
    them back; on the backend plan, whoever schedules the work can set owners
    and status and press "copy plan"; on the release checklist, whoever
-   releases picks the environment, copies what to run and ticks each step.
+   releases picks the environment, then hands it to an AI that can act (the
+   box at the top) or works through the steps and ticks them.
    The frontend API guide opens on one client with `?client=<id>` after the
    file name; send each frontend team its own link.
 4. Anything you decided for them: the short name, sections you skipped and

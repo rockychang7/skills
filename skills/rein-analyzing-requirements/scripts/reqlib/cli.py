@@ -303,14 +303,31 @@ def build_parser() -> argparse.ArgumentParser:
     p = _add_command(
         sub,
         "applied",
-        "record which SQL version ran in an environment",
-        "Record that the SQL up to analysis version N has been run in an\n"
-        "environment. Later SQL patches for that environment start from there.",
+        "record that an environment's tables reached a version",
+        "Record that an environment's tables and data have the changes up to\n"
+        "analysis version N, however they got there (by a tool, with a deploy,\n"
+        "or by hand). The SQL file, the release checklist and steps then list\n"
+        "only what that environment still needs.",
         ["applied --req activity-signup --env test --v 3"],
     )
     _add_req_options(p)
     p.add_argument("--env", required=True, metavar="ENV", help="environment name from the project settings (test)")
-    p.add_argument("--v", required=True, type=_positive_int, metavar="VERSION", help="analysis version that was run")
+    p.add_argument("--v", required=True, type=_positive_int, metavar="VERSION", help="analysis version now in place")
+
+    p = _add_command(
+        sub,
+        "steps",
+        "list what an environment needs, for the tool that does it",
+        "List what one environment needs for this requirement, from the last\n"
+        "rendered version: table and data changes still missing there (with the\n"
+        "statements), config values, the analysis' own release items, how to\n"
+        "check each step, and how to roll back. It says what must be true, not\n"
+        "how to get there: carry the steps out with whatever tools the session\n"
+        "has, or hand them to a person. Changes nothing.",
+        ["steps --req activity-signup --env test"],
+    )
+    _add_req_options(p)
+    p.add_argument("--env", required=True, metavar="ENV", help="environment name from the project settings (test)")
 
     p = _add_command(
         sub,

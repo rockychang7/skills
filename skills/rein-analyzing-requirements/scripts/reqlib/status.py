@@ -130,9 +130,9 @@ def report(
                     issues.append(issue(
                         "status.env-behind", "warn",
                         "%s ran the SQL of version %d; %d statement(s) added since have not run there." % (env, ran, to_run),
-                        hint="Tell the user: in %s, run the \"version %d → %d\" group in section 5 of the SQL file "
-                        "(the release checklist has it ready to copy). Once it has run, record it with applied."
-                        % (env, ran, last["v"]), where="applied.%s" % env))
+                        hint="`steps --env %s` lists what %s still needs (version %d → %d); bring it there with "
+                        "the tools at hand or tell the user. Once it is in place, record it with applied."
+                        % (env, env, ran, last["v"]), where="applied.%s" % env))
             environments.append({"env": env, "ran": ran, "to_run": to_run})
     fields["environments"] = environments
 

@@ -272,6 +272,11 @@ tbody th { font-weight: 400; }
 .st.ok .st-v { color: var(--add); }
 .st .prog { margin: 8px 0 4px; }
 .hold-p { font-size: 13px; color: var(--ink-2); margin: -2px 2px 8px; }
+.handoff { margin-top: 12px; display: grid; gap: 6px; padding: 12px 14px; border-radius: var(--r); background: var(--accent-soft); }
+.handoff h2 { font-size: 13px; font-weight: 700; color: var(--accent); letter-spacing: .06em; margin-left: 2px; }
+.handoff p { font-size: 13px; color: var(--ink-2); margin: 0 2px 2px; }
+.handoff-q { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; padding: 10px 12px; border-radius: 9px; background: var(--page); }
+.handoff-q q { quotes: none; flex: 1 1 280px; min-width: 0; font-size: 14px; color: var(--ink); overflow-wrap: anywhere; }
 
 /* ---------- steps ---------- */
 .stage-list { display: grid; gap: 10px; }
@@ -409,7 +414,8 @@ tr.ln.is-chg::before { display: none; }
   var ENVS = arr(D.envs).map(function (e) { return e.name; });
   var env = store.get("env", null);
   if (ENVS.indexOf(env) < 0) env = ENVS[ENVS.length - 1] || "";
-  var center = D.config_center || t("center");
+  // Steps say what must be true in an environment and how to check it, never
+  // how to get there: that is up to the tools at hand (or the person doing it).
   var release = arr(A.release);
   var configs = arr(A.configs);
   var openP0 = arr(A.questions).filter(function (q) { return q.status === "open" && q.priority === "P0"; });
@@ -426,7 +432,7 @@ tr.ln.is-chg::before { display: none; }
     return arr(D.sql && D.sql[e]).map(function (r) {
       var st = { id: "sql:" + r.db, type: "sql", s: state("sql:" + r.db), sql: r };
       if (r.mode === "fresh" || r.mode === "catch") {
-        st.text = th(r.mode === "fresh" ? "sql_fresh" : "sql_catch", { file: code(r.file), from: h(r.from), v: h(M.analysis_v) });
+        st.text = th(r.mode === "fresh" ? "sql_fresh" : "sql_catch", { env: code(e), file: code(r.file), from: h(r.from), v: h(M.analysis_v) });
         var parts = [];
         if (arr(r.new).length) parts.push(th("sql_new", { names: r.new.map(code).join(h(t("sep_list"))) }));
         if (arr(r.alter).length) parts.push(th("sql_alter", { names: r.alter.map(code).join(h(t("sep_list"))) }));
@@ -447,9 +453,9 @@ tr.ln.is-chg::before { display: none; }
     var val = (c.values || {})[e];
     return {
       id: "cfg:" + c.key, type: "config", s: state("config:" + c.key),
-      text: th(c.kind === "modify" ? "cfg_modify" : "cfg_new", { center: h(center), key: code(c.key), val: code(val), old: code(c.old) }),
+      text: th(c.kind === "modify" ? "cfg_modify" : "cfg_new", { env: code(e), key: code(c.key), val: code(val), old: code(c.old) }),
       detail: rich(c.does),
-      verify: th("cfg_verify", { center: h(center), key: code(c.key), val: code(val) })
+      verify: th("cfg_verify", { env: code(e), key: code(c.key), val: code(val) })
     };
   }
   function aiStep(x) {
@@ -466,7 +472,7 @@ tr.ln.is-chg::before { display: none; }
     configs.forEach(function (c) {
       if (c.removed || c.kind !== "modify" || c.old == null) return;
       S.rollback.push({ id: "cfgback:" + c.key, type: "config", s: state("config:" + c.key),
-        text: th("cfg_back", { key: code(c.key), old: code(c.old) }), verify: th("cfg_back_v", { center: h(center), old: code(c.old) }) });
+        text: th("cfg_back", { env: code(e), key: code(c.key), old: code(c.old) }), verify: th("cfg_back_v", { env: code(e), key: code(c.key), old: code(c.old) }) });
     });
     arr(D.sql && D.sql[e]).forEach(function (r) {
       S.rollback.push({ id: "sqlback:" + r.db, type: "sql", text: th("sql_back", { file: code(r.file) }), detail: h(t("sql_back_d")),
@@ -551,6 +557,9 @@ tr.ln.is-chg::before { display: none; }
     var c4 = base ?
       '<a class="st chg" href="#changes" id="c-chg"><span class="st-l">' + h(t("c_chg_l", baseVars)) + '</span><span class="st-v">' + h(t("c_chg_v", { n: X.total })) + '</span><span class="st-s">' + h(t("c_chg_s")) + "</span></a>" :
       '<div class="st"><span class="st-l">' + h(t("tb_send")) + '</span><span class="st-v">' + h(t("c_draft")) + '</span><span class="st-s">' + h(t("c_draft_s")) + "</span></div>";
+    // Handing the environment to an AI that has tools to act is the first way offered; ticking by hand stays below.
+    var ai = list.length ? '<div class="handoff" id="handoff"><h2>' + h(t("ai_h")) + "</h2><p>" + h(t("ai_p", { env: env })) + '</p><div class="handoff-q"><q>' +
+      h(t("ai_text", { title: A.meta.title, id: M.id, env: env })) + '</q><button type="button" class="btn primary" data-copy>' + h(t("copy")) + "</button></div></div>" : "";
     var hold = openP0.length ? '<div class="hold" id="hold"><h2>' + h(t("hold_h")) + '</h2><p class="hold-p">' + h(t("hold_p")) + "</p><ul>" + openP0.map(function (q) {
       var what = arr(q.blocks).map(function (b) { return '<span class="id">' + h(b.id) + "</span> " + h(b.name); }).join(h(t("sep_list"))) || '<span class="id">' + h(q.id) + "</span>";
       return "<li><span>" + what + '</span><span class="wait-chip">' + h(t("hold_wait", { q: q.id })) + '</span><span class="hq">' + h(q.title) + " " +
@@ -560,7 +569,7 @@ tr.ln.is-chg::before { display: none; }
       '<div class="kicker">' + h(M.send ? t("kicker", { n: M.send.no, date: M.send.date }) : t("kicker_draft")) + "</div>" +
       "<h1>" + h(A.meta.title) + '</h1><p class="lead">' + lead + "</p></div>" +
       '<dl class="tblock">' + tb + "</dl></div>" +
-      '<div class="status">' + c1 + sqlCard(env) + c3 + c4 + "</div>" + hold + "</header>";
+      '<div class="status">' + c1 + sqlCard(env) + c3 + c4 + "</div>" + ai + hold + "</header>";
   }
 
   /* ---------- stages ---------- */

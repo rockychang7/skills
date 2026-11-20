@@ -17,6 +17,7 @@ from .files import JsonProblem, read_json, write_text
 from .output import Stop, finish, issue, note, summarize
 from .settings import LANGS, Settings, guard_not_in_skill_folder, workspace_suggestions
 from .status import report
+from .steps import for_env
 from .store import by_name, check_name, find, latest_doc, load_state, save_state
 
 # How hints name the script; SKILL.md defines `req.py` as the full command.
@@ -359,7 +360,7 @@ def cmd_render(args: argparse.Namespace) -> int:
             rows = sql.release_rows(analysis, state, settings.envs(), entry["v"], load_version, texts, sql_files)
             write(page, names[page], render.release_html(
                 analysis, state, entry["v"], generated, texts, sql.env_rows(state, settings.envs()), rows,
-                settings.config_center(), base, base_analysis, pages))
+                base, base_analysis, pages))
         else:
             for db, name in sql_files.items():
                 content = sql.build(analysis, db, entry["v"], generated, state["id"], state, settings.envs(),
@@ -425,6 +426,34 @@ def cmd_status(args: argparse.Namespace) -> int:
                   workspace={"dir": str(workspace), "from": chosen_by}, up_to_date=not issues, **fields)
 
 
+def cmd_steps(args: argparse.Namespace) -> int:
+    settings, folder, state = _requirement(args)
+    envs = settings.envs()
+    if args.env not in envs:
+        raise Stop(issue("steps.unknown-env", "error", "Environment %r is not in the project settings." % args.env,
+                         hint="Known environments: %s." % ", ".join(envs), where="--env"))
+    versions = state.get("versions") or []
+    if not versions:
+        raise Stop(issue("steps.not-rendered", "error", "Nothing has been rendered yet.",
+                         hint="Run check and render first; the steps come from the rendered version.", where="--req"))
+    last = versions[-1]
+    load_version = _version_loader(folder, state)
+    issues = []
+    try:
+        current = read_json(folder / "analysis.json", "analysis")
+        frontend = _frontend(folder, False)
+        if render.draft_fingerprint(current, frontend, _contract(folder, state)[1]) != last.get("sha256"):
+            issues.append(issue("steps.not-rendered", "warn",
+                                "The drafts changed after version %d; these steps are version %d's." % (last["v"], last["v"]),
+                                hint="If the change matters for this release, run check and render first.",
+                                where="analysis.json"))
+    except JsonProblem:
+        pass
+    plan = for_env(load_version(last["v"]), state, args.env, last["v"], load_version,
+                   render.load_texts(state["lang"]), folder / "out")
+    return finish("steps", issues, id=state["id"], env=args.env, **plan)
+
+
 def cmd_applied(args: argparse.Namespace) -> int:
     settings, folder, state = _requirement(args)
     versions = [v["v"] for v in state.get("versions", [])]
@@ -465,6 +494,7 @@ HANDLERS = {
     "check": cmd_check,
     "render": cmd_render,
     "applied": cmd_applied,
+    "steps": cmd_steps,
     "contract": cmd_contract,
     "status": cmd_status,
     "example": cmd_example,

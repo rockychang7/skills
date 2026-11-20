@@ -107,11 +107,6 @@ class Settings:
             return envs
         return list(DEFAULT_ENVS)
 
-    def config_center(self) -> str | None:
-        """What the project calls the place configs live (Apollo, Nacos, …); None: the page's own word."""
-        value = self.profile.get("config_center")
-        return value.strip() if isinstance(value, str) and value.strip() else None
-
     def openapi(self) -> str | None:
         """Where the project's API description is: a URL, or a path relative to the project root."""
         value = self.profile.get("openapi")
