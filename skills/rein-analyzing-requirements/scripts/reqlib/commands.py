@@ -15,6 +15,7 @@ from .doc import duplicate_ids, parse_sections, read_doc
 from .files import JsonProblem, read_json, write_text
 from .output import Stop, finish, issue, note, summarize
 from .settings import LANGS, Settings, guard_not_in_skill_folder, workspace_suggestions
+from .status import report
 from .store import by_name, check_name, find, latest_doc, load_state, save_state
 
 # How hints name the script; SKILL.md defines `req.py` as the full command.
@@ -327,6 +328,22 @@ def cmd_render(args: argparse.Namespace) -> int:
                   new_version=created, compared_with=base, files=files, not_yet=not_yet)
 
 
+def cmd_status(args: argparse.Namespace) -> int:
+    settings, folder, state = _requirement(args)
+    workspace, chosen_by = settings.workspace(args.dir)
+    try:
+        analysis = read_json(folder / "analysis.json", "analysis")
+    except JsonProblem as e:
+        if not e.issue["code"].endswith(".missing"):
+            raise Stop(e.issue, exit_code=1, file=str(folder / "analysis.json"))
+        analysis = None
+    doc = latest_doc(folder, state)
+    sections = {s.id for s in parse_sections(doc.read_text(encoding="utf-8"))}
+    fields, issues = report(folder, state, analysis, settings.envs(), sections, _version_loader(folder, state))
+    return finish("status", issues, id=state["id"], dir=str(folder), lang=state["lang"],
+                  workspace={"dir": str(workspace), "from": chosen_by}, up_to_date=not issues, **fields)
+
+
 def cmd_applied(args: argparse.Namespace) -> int:
     settings, folder, state = _requirement(args)
     versions = [v["v"] for v in state.get("versions", [])]
@@ -367,5 +384,6 @@ HANDLERS = {
     "check": cmd_check,
     "render": cmd_render,
     "applied": cmd_applied,
+    "status": cmd_status,
     "example": cmd_example,
 }

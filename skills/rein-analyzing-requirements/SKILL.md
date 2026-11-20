@@ -48,6 +48,7 @@ from the project directory so that it finds the project settings.
 | Situation | What to do |
 | --- | --- |
 | A new requirement: a document file, a link, or pasted text | [New requirement](#new-requirement) |
+| Picking up a requirement in a new session, or the user asks where it stands | `status --req <name>`; each finding's `hint` is the next step. Tell the user in plain words |
 | Answers to open questions: text copied with the brief's "copy answers" button, or said in chat | `references/questions.md`, "When answers arrive" |
 | The user asks to change the analysis (add a feature, fix a rule) | Edit `analysis.json`; once the brief has been rendered, add a `changes` entry; then `check` and `render` |
 | Owners or status: text copied with the backend plan's "copy plan" button, or said in chat | Write them into those `backend.apis` items (owner, status); no `changes` entry, they are progress, not requirement changes; then `check` and `render` |

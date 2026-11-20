@@ -266,9 +266,11 @@ def build_parser() -> argparse.ArgumentParser:
         sub,
         "status",
         "report what is out of date",
-        "Report what is out of date: the document changed but the analysis did\n"
-        "not follow, the analysis changed but was not rendered, answered questions\n"
-        "not yet applied, and changes not yet sent.",
+        "Report where the requirement stands and what is out of date: the analysis\n"
+        "changed but was not rendered, the document is newer than the analysis,\n"
+        "answered questions not yet applied, pages missing, outdated or edited by\n"
+        "hand, environments whose SQL is behind, and whether check passes. Each\n"
+        "finding is a warn issue whose hint is the next step. Changes nothing.",
         ["status --req activity-signup"],
     )
     _add_req_options(p)
