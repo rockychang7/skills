@@ -1,0 +1,442 @@
+{
+  "format": 1,
+  "meta": {
+    "title": "活动报名",
+    "doc_version": "V1.0-1112",
+    "code_commit": "dev@1a2b3c4"
+  },
+  "brief": {
+    "what": "景区能给活动开报名、设名额；游客在小程序报名、查看和取消，报名后会收到提醒。",
+    "value": "不用再打电话报名、手工记名单，不会记错和超员。"
+  },
+  "roles": [
+    { "id": "staff", "name": "景区工作人员", "does": "给活动开报名、设名额、看名单" },
+    { "id": "visitor", "name": "游客", "does": "报名、查看、取消报名" },
+    { "id": "system", "name": "系统", "does": "发报名提醒" }
+  ],
+  "clients": [
+    { "id": "b", "name": "B 端后台", "where": "景区工作人员在电脑上用" },
+    { "id": "c", "name": "C 端小程序", "where": "游客在微信里用" }
+  ],
+  "flows": [
+    {
+      "id": "P1",
+      "name": "报名",
+      "summary": "工作人员开报名，游客报名",
+      "steps": [
+        { "id": "s1", "role": "staff", "text": "新建或编辑活动时打开「需要报名」，设名额和报名截止时间", "src": "§2.1", "features": ["B01"] },
+        { "id": "s2", "role": "visitor", "text": "打开活动详情，看到剩余名额和截止时间", "src": "§3.1", "features": ["C01"] },
+        { "id": "s3", "role": "visitor", "kind": "decision", "text": "现在能报名吗？",
+          "next": [{ "to": "s4", "when": "有名额" }, { "to": "s8", "when": "名额满了" }, { "to": "s9", "when": "过了截止时间" }] },
+        { "id": "s4", "role": "visitor", "text": "填姓名和手机号，提交报名", "src": "§3.2", "features": ["C02"] },
+        { "id": "s5", "role": "system", "text": "报名成功，名额减一，发报名成功提醒", "src": "§3.2, §3.5", "features": ["C02", "C05"],
+          "next": [{ "to": "s6", "when": "活动前一天" }, { "to": "s10", "when": "随时" }] },
+        { "id": "s6", "role": "system", "text": "给已报名的游客再发一次提醒", "src": "§3.5", "features": ["C05"], "next": [] },
+        { "id": "s8", "role": "visitor", "kind": "end", "text": "按钮置灰，显示「名额已满」", "src": "§3.2" },
+        { "id": "s9", "role": "visitor", "kind": "end", "text": "按钮置灰，显示「报名已截止」", "src": "§3.2" },
+        { "id": "s10", "role": "staff", "text": "在后台报名名单里看到这条报名", "src": "§2.2", "features": ["B02"], "next": [] }
+      ]
+    },
+    {
+      "id": "P2",
+      "name": "取消报名",
+      "summary": "游客取消后名额放回",
+      "steps": [
+        { "id": "c1", "role": "visitor", "text": "在「我的报名」里点「取消」", "src": "§3.3, §3.4", "features": ["C03", "C04"] },
+        { "id": "c2", "role": "visitor", "kind": "decision", "text": "离活动开始超过 24 小时吗？", "q": "Q01",
+          "next": [{ "to": "c3", "when": "超过" }, { "to": "c6", "when": "不到 24 小时" }] },
+        { "id": "c3", "role": "system", "text": "报名改为已取消，名额立刻放回", "src": "§3.4", "features": ["C04"], "next": [] },
+        { "id": "c6", "role": "visitor", "kind": "end", "text": "按钮置灰，提示开始前 24 小时内不能取消", "src": "§3.4" }
+      ]
+    }
+  ],
+  "terms": [
+    { "term": "名额", "means": "一个活动最多能报几个人" },
+    { "term": "剩余名额", "means": "名额减去已报名的人数，取消的不算" }
+  ],
+  "confusions": [
+    { "a": "报名截止", "b": "活动开始", "diff": "过了报名截止就不能新报名；离活动开始不到 24 小时就不能取消。两个时间各管各的" }
+  ],
+  "states": [
+    { "of": "报名记录", "from": "（没有）", "to": "已报名", "when": "游客提交报名", "then": "剩余名额 -1，发报名成功提醒" },
+    { "of": "报名记录", "from": "已报名", "to": "已取消", "when": "游客在活动开始 24 小时前点「取消」", "then": "剩余名额 +1" }
+  ],
+  "inputs": [
+    { "where": "后台编辑活动", "name": "名额", "rule": "打开「需要报名」后必填，1～9999 的整数", "src": "§2.1" },
+    { "where": "后台编辑活动", "name": "报名截止时间", "rule": "打开「需要报名」后必填，必须早于活动开始时间", "src": "§2.1" },
+    { "where": "小程序报名表", "name": "姓名、手机号", "rule": "都必填，默认带出上次填的", "src": "§3.2" }
+  ],
+  "out_of_scope": [
+    { "text": "付费报名", "src": "§5" },
+    { "text": "报名表自定义字段", "src": "§5" }
+  ],
+  "skipped_sections": [
+    { "src": "§1", "why": "背景介绍，不影响开发" }
+  ],
+  "prototypes": {
+    "links": [
+      { "title": "设计稿", "url": "https://example.com/design/activity-signup" }
+    ]
+  },
+  "features": [
+    {
+      "id": "B01",
+      "side": "b",
+      "name": "设置报名",
+      "summary": "工作人员新建或编辑活动时，可以打开报名，设名额和报名截止时间。",
+      "rules": [
+        { "kind": "prd", "text": "打开「需要报名」后，名额和报名截止时间必填", "src": "§2.1" },
+        { "kind": "prd", "text": "报名截止时间必须早于活动开始时间", "src": "§2.1" },
+        { "kind": "prd", "text": "名额最少只能改到已报名的人数", "q": "Q02" },
+        { "kind": "code", "text": "现在活动有「人数上限」，只在详情页展示，不限制任何人", "path": "activity/service/ActivityService.java:120" }
+      ],
+      "acceptance": [
+        "打开「需要报名」但不填名额：保存失败，提示「请填写名额」",
+        "截止时间晚于开始时间：保存失败，提示「报名截止时间要早于活动开始时间」",
+        "已报 12 人，把名额改成 10：保存失败，提示「名额不能少于已报名人数 12」"
+      ],
+      "impact": ["后台新建、编辑活动页多一块「报名设置」"],
+      "apis": ["B1"]
+    },
+    {
+      "id": "B02",
+      "side": "b",
+      "name": "报名名单",
+      "summary": "工作人员在后台看某个活动的报名名单。",
+      "rules": [
+        { "kind": "prd", "text": "名单显示姓名、手机号、报名时间、状态，按报名时间倒序，每页 20 条", "src": "§2.2" }
+      ],
+      "acceptance": [
+        "3 人报名、其中 1 人取消：名单显示 3 行，取消的那行状态是「已取消」"
+      ],
+      "impact": ["后台活动列表每一行多一个「报名名单」入口"],
+      "apis": ["B2"]
+    },
+    {
+      "id": "B03",
+      "side": "b",
+      "name": "导出报名名单",
+      "summary": "工作人员在名单页把一个活动的全部报名导出成 Excel。",
+      "rules": [
+        { "kind": "prd", "text": "名单页右上角「导出」，导出当前活动的全部报名", "src": "§2.3" }
+      ],
+      "acceptance": ["点「导出」：下载一个 Excel，行数和名单一致"],
+      "apis": ["B3"]
+    },
+    {
+      "id": "C01",
+      "side": "c",
+      "name": "详情页显示名额",
+      "summary": "需要报名的活动，详情页显示剩余名额和报名截止时间。",
+      "rules": [
+        { "kind": "prd", "text": "显示剩余名额和报名截止时间", "src": "§3.1" },
+        { "kind": "code", "text": "现在详情页只显示「限 50 人」，不管已经报了多少人", "path": "activity/api/ActivityController.java:45" }
+      ],
+      "acceptance": ["名额 50、已报 12 人：显示「剩余 38 个名额」和截止时间"],
+      "impact": ["详情页的「限 50 人」改成「剩余 38 个名额 · 11-20 18:00 截止」"],
+      "apis": ["C1"]
+    },
+    {
+      "id": "C02",
+      "side": "c",
+      "name": "报名",
+      "summary": "游客在详情页点「立即报名」，填姓名和手机号后报名成功。",
+      "rules": [
+        { "kind": "prd", "text": "姓名、手机号必填，默认带出上次填的", "src": "§3.2" },
+        { "kind": "prd", "text": "名额满了或过了报名截止时间，按钮置灰，分别显示「名额已满」「报名已截止」", "src": "§3.2" },
+        { "kind": "ask", "text": "每人同一活动只能报一次，但按账号算还是按手机号算没说", "q": "Q03" },
+        { "kind": "ai", "text": "最后一个名额两个人同时报，只能成功一个，另一个提示「名额已满」" }
+      ],
+      "acceptance": [
+        "剩 1 个名额，两人同时提交：一人成功，另一人提示「名额已满」",
+        "已经报过名再提交：提示「你已经报过名了」"
+      ],
+      "impact": ["详情页底部多一个「立即报名」按钮"],
+      "apis": ["C2"]
+    },
+    {
+      "id": "C03",
+      "side": "c",
+      "name": "我的报名",
+      "summary": "「我的」页面新增「我的报名」，列出自己报过的活动。",
+      "rules": [
+        { "kind": "prd", "text": "按活动开始时间倒序", "src": "§3.3" },
+        { "kind": "ai", "text": "已取消的也列出来，标「已取消」，方便游客知道自己取消过" }
+      ],
+      "acceptance": ["报了 2 个活动、取消了 1 个：列表 2 行，取消的那行标「已取消」"],
+      "impact": ["「我的」页面多一个「我的报名」入口"],
+      "apis": ["C3"]
+    },
+    {
+      "id": "C04",
+      "side": "c",
+      "name": "取消报名",
+      "summary": "游客在活动开始 24 小时前取消报名，名额放回。",
+      "rules": [
+        { "kind": "prd", "text": "活动开始前 24 小时内不能取消", "src": "§3.4" },
+        { "kind": "prd", "text": "取消后名额放回", "src": "§3.4" },
+        { "kind": "ai", "text": "名额立刻放回，不等定时任务" },
+        { "kind": "ask", "text": "报名截止以后还能不能取消", "q": "Q01" },
+        { "kind": "ask", "text": "取消以后还能不能再报", "q": "Q04" }
+      ],
+      "acceptance": [
+        "离开始 25 小时取消：成功，剩余名额 +1",
+        "离开始 23 小时：「取消」按钮置灰，提示「活动开始前 24 小时内不能取消」"
+      ],
+      "impact": ["「我的报名」每一行多一个「取消」按钮"],
+      "apis": ["C4"]
+    },
+    {
+      "id": "C05",
+      "side": "c",
+      "name": "报名提醒",
+      "summary": "报名成功和活动开始前一天，各给游客发一条提醒。",
+      "rules": [
+        { "kind": "prd", "text": "报名成功后发一条提醒", "src": "§3.5" },
+        { "kind": "prd", "text": "活动开始前一天再提醒一次", "src": "§3.5" },
+        { "kind": "ai", "text": "已取消的不发；发送失败只记日志，不重试" }
+      ],
+      "acceptance": [
+        "报名成功：马上收到「报名成功」提醒",
+        "明天开始的活动：已报名的游客今天上午 10 点收到提醒，已取消的收不到"
+      ],
+      "apis": ["C2", "N1"]
+    }
+  ],
+  "backend": {
+    "apis": [
+      {
+        "id": "B1",
+        "side": "b",
+        "kind": "modify",
+        "name": "保存活动",
+        "path": "POST /admin/activity/save",
+        "does": "保存活动时多存报名设置：要不要报名、名额、报名截止时间",
+        "now": "现在只存活动基本信息和人数上限，人数上限只用来展示",
+        "where": "后台新建、编辑活动点「保存」时",
+        "todo": [
+          "多收三项：要不要报名、名额、报名截止时间",
+          "打开报名时校验名额必填、截止时间早于开始时间",
+          "改名额时校验不能少于已报名人数"
+        ],
+        "online": [
+          "只有后台活动编辑页一个地方调，跟这次一起改",
+          "老活动没有报名设置，默认「不需要报名」，不受影响"
+        ],
+        "status": "todo"
+      },
+      {
+        "id": "B2",
+        "side": "b",
+        "kind": "new",
+        "name": "报名名单",
+        "does": "分页查一个活动的报名名单",
+        "where": "后台活动列表点「报名名单」时",
+        "todo": ["按活动查报名记录，按报名时间倒序，每页 20 条", "返回姓名、手机号、报名时间、状态"],
+        "status": "todo",
+        "depends": ["B1"]
+      },
+      {
+        "id": "B3",
+        "side": "b",
+        "kind": "new",
+        "name": "导出报名名单",
+        "does": "把一个活动的全部报名导出成 Excel",
+        "where": "名单页点「导出」时",
+        "todo": ["查出这个活动的全部报名记录，生成 Excel 下载"],
+        "status": "todo",
+        "depends": ["B2"]
+      },
+      {
+        "id": "C1",
+        "side": "c",
+        "kind": "modify",
+        "name": "活动详情",
+        "path": "GET /activity/detail",
+        "does": "详情多返回报名信息：要不要报名、剩余名额、报名截止时间、我报过没有",
+        "now": "现在只返回活动信息和人数上限",
+        "where": "小程序打开活动详情页时",
+        "todo": [
+          "多返回：要不要报名、剩余名额、报名截止时间",
+          "游客登录了再返回他的报名状态",
+          "剩余名额 = 名额 - 已报名人数"
+        ],
+        "online": [
+          "小程序所有版本的详情页都调它；只加字段、不改老字段，老版本不受影响",
+          "调用量大（每次打开详情页都调），数已报名人数要走索引"
+        ],
+        "status": "todo",
+        "depends": ["B1"]
+      },
+      {
+        "id": "C2",
+        "side": "c",
+        "kind": "new",
+        "name": "报名",
+        "does": "给当前游客报名一个活动",
+        "where": "详情页点「立即报名」、填完表提交时",
+        "todo": [
+          "校验：需要报名、没过截止时间、还有名额、没报过",
+          "扣名额要防两个人同时抢最后一个",
+          "存报名记录",
+          "发报名成功提醒"
+        ],
+        "status": "todo",
+        "depends": ["B1"]
+      },
+      {
+        "id": "C3",
+        "side": "c",
+        "kind": "new",
+        "name": "我的报名",
+        "does": "列出当前游客报过的活动",
+        "where": "「我的」→「我的报名」打开时",
+        "todo": ["按活动开始时间倒序", "已取消的也列出来"],
+        "status": "todo",
+        "depends": ["C2"]
+      },
+      {
+        "id": "C4",
+        "side": "c",
+        "kind": "new",
+        "name": "取消报名",
+        "does": "取消一条报名并放回名额",
+        "where": "「我的报名」点「取消」时",
+        "todo": ["校验离活动开始超过 24 小时", "报名记录改成已取消", "名额放回"],
+        "status": "todo",
+        "depends": ["C2"]
+      },
+      {
+        "id": "N1",
+        "side": "c",
+        "internal": true,
+        "kind": "new",
+        "name": "活动前一天提醒",
+        "does": "给明天开始的活动里已报名的游客发提醒",
+        "where": "每天上午 10 点",
+        "todo": ["查出明天开始的活动里状态是已报名的记录", "逐个发提醒，失败的记日志"],
+        "online": ["一上线就会跑；上线时还没有报名数据，不会给老活动发提醒"],
+        "status": "todo",
+        "depends": ["C2"]
+      }
+    ],
+    "tables": [
+      {
+        "name": "activity",
+        "kind": "alter",
+        "title": "活动",
+        "does": "加两项报名设置；名额先用原来的人数上限 quota",
+        "sql": "ALTER TABLE activity\n  ADD COLUMN need_signup TINYINT NOT NULL DEFAULT 0 COMMENT '要不要报名：0 不要 1 要',\n  ADD COLUMN signup_deadline DATETIME NULL COMMENT '报名截止时间'",
+        "rollback": "ALTER TABLE activity\n  DROP COLUMN need_signup,\n  DROP COLUMN signup_deadline"
+      },
+      {
+        "name": "activity_signup",
+        "kind": "new",
+        "title": "活动报名记录",
+        "does": "一个游客报一个活动一条",
+        "sql": "CREATE TABLE activity_signup (\n  id BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键',\n  activity_id BIGINT NOT NULL COMMENT '活动 id',\n  user_id BIGINT NOT NULL COMMENT '游客账号 id',\n  name VARCHAR(20) NOT NULL COMMENT '报名填的姓名',\n  phone VARCHAR(20) NOT NULL COMMENT '报名填的手机号',\n  status TINYINT NOT NULL DEFAULT 1 COMMENT '1 已报名 2 已取消',\n  create_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '报名时间',\n  update_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',\n  PRIMARY KEY (id),\n  UNIQUE KEY uk_activity_user (activity_id, user_id),\n  KEY idx_user (user_id)\n) COMMENT = '活动报名记录'"
+      }
+    ],
+    "data": [],
+    "configs": [
+      {
+        "key": "activity.signup.enabled",
+        "kind": "new",
+        "values": { "dev": "true", "test": "true", "prod": "false" },
+        "does": "报名入口总开关；线上先关，运营确认后再开",
+        "src": "§4"
+      }
+    ],
+    "risks": [
+      { "text": "最后一个名额两个人同时报，可能超员", "apis": ["C2"] },
+      { "text": "上线前已有的活动没有报名设置，详情页要按「不需要报名」显示" }
+    ]
+  },
+  "release": [
+    {
+      "id": "R1",
+      "stage": "deploy",
+      "type": "deploy",
+      "text": "发布 `activity-service`",
+      "verify": "新版本启动正常，后台编辑活动页能看到「报名设置」"
+    },
+    {
+      "id": "R2",
+      "stage": "after",
+      "type": "other",
+      "text": "运营确认后打开 `activity.signup.enabled`，看半小时报名接口的报错",
+      "verify": "报错数没有明显上涨",
+      "src": "§4"
+    },
+    {
+      "id": "R3",
+      "stage": "rollback",
+      "type": "config",
+      "text": "关掉 `activity.signup.enabled`，报名入口马上消失",
+      "verify": "详情页不再显示「立即报名」"
+    }
+  ],
+  "questions": [
+    {
+      "id": "Q01",
+      "priority": "P0",
+      "status": "open",
+      "title": "报名截止以后，还能不能取消？",
+      "quotes": [{ "src": "§3.4", "text": "活动开始前 24 小时内不能取消。" }],
+      "why": "原文只说开始前 24 小时内不能取消，没说报名截止以后能不能取消；这两个时间不一样",
+      "affects": ["C04"],
+      "options": [
+        { "key": "A", "text": "能，只看离活动开始是否超过 24 小时", "reason": "只有一条规则，游客好理解", "recommended": true },
+        { "key": "B", "text": "不能，报名截止以后一律不能取消", "reason": "截止后名单就固定了，景区好准备；但游客临时有事没法退" }
+      ],
+      "owner": "产品"
+    },
+    {
+      "id": "Q02",
+      "priority": "P1",
+      "status": "applied",
+      "title": "已经有人报名后，名额能不能改成比已报名人数少？",
+      "quotes": [{ "src": "§2.1", "text": "名额填 1～9999 的整数。" }],
+      "why": "原文没说改名额有什么限制；改小以后已经报上的人怎么办不清楚",
+      "affects": ["B01"],
+      "options": [
+        { "key": "A", "text": "不能，最少只能改到已报名人数", "reason": "不会出现报上了又被挤掉的人", "recommended": true },
+        { "key": "B", "text": "能，已报名的都保留，只是不再接受新报名", "reason": "场地变小时运营能调" }
+      ],
+      "owner": "产品",
+      "answer": { "choice": "A", "at": "2026-11-14", "by": "产品" }
+    },
+    {
+      "id": "Q03",
+      "priority": "P0",
+      "status": "open",
+      "title": "「每人只能报一次」按账号算，还是按手机号算？",
+      "quotes": [{ "src": "§3.2", "text": "每个人同一活动只能报一次。" }],
+      "why": "一个账号可以填不同手机号，一个手机号也可能被几个账号填；按哪个算，决定了怎么防重复报名",
+      "affects": ["C02"],
+      "options": [
+        { "key": "A", "text": "按账号算", "reason": "和登录一致，最简单", "recommended": true },
+        { "key": "B", "text": "按手机号算", "reason": "能挡住一人多号，但帮家人报名会被拦" }
+      ],
+      "owner": "产品"
+    },
+    {
+      "id": "Q04",
+      "priority": "P1",
+      "status": "open",
+      "title": "取消以后，还能再报名吗？",
+      "quotes": [{ "src": "§3.4", "text": "取消后名额放回。" }],
+      "why": "原文只说取消后名额放回，没说本人还能不能再报",
+      "affects": ["C02", "C04"],
+      "options": [
+        { "key": "A", "text": "能，只要还有名额", "reason": "游客改主意很常见", "recommended": true },
+        { "key": "B", "text": "不能", "reason": "防止有人反复占名额" }
+      ],
+      "owner": "产品"
+    }
+  ],
+  "changes": [
+    { "type": "add", "text": "C05 报名提醒：报名成功和活动前一天各发一条（§3.5）", "refs": ["C05", "N1"], "src": "§3.5" },
+    { "type": "modify", "text": "Q02 定了：名额最少只能改到已报名人数", "refs": ["Q02", "B01", "B1"] }
+  ]
+}

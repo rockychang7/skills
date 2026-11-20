@@ -1,0 +1,218 @@
+{
+  "format": 1,
+  "conventions": [
+    "所有接口返回外层都是 {code, msg, data}；成功时 code 是 \"OK\"，失败时是错误码，见文末「错误码」",
+    "字段名用下划线，比如 remain_quota",
+    "时间都是 yyyy-MM-dd HH:mm:ss 格式的字符串"
+  ],
+  "clients": [
+    {
+      "id": "b",
+      "name": "B 端后台",
+      "status": "doing",
+      "conventions": ["请求头带 Admin-Token（后台登录后拿到）"],
+      "flow": {
+        "nodes": [
+          { "id": "list", "name": "活动列表" },
+          { "id": "edit", "name": "活动编辑页", "calls": ["B1"] },
+          { "id": "signups", "name": "报名名单页", "calls": ["B2"] }
+        ],
+        "edges": [
+          { "from": "list", "to": "edit", "label": "点「新建」或「编辑」" },
+          { "from": "edit", "to": "list", "label": "保存成功", "back": true },
+          { "from": "list", "to": "signups", "label": "点「报名名单」" }
+        ]
+      },
+      "apis": [
+        {
+          "id": "B1",
+          "contract": "POST /admin/activity/save",
+          "change": "多传 need_signup、signup_deadline；名额改传 max_quota（quota 还能用到 11-25）",
+          "facts": [
+            { "k": "什么时候调", "v": "编辑页点「保存」" },
+            { "k": "登录", "v": "后台登录" }
+          ],
+          "frontend": [
+            "打开「需要报名」才显示名额和报名截止时间两个输入框",
+            "截止时间晚于活动开始时间，提交前就拦下，提示「报名截止时间要早于活动开始时间」"
+          ],
+          "example": { "code": "OK", "msg": "ok", "data": { "id": 1001 } }
+        },
+        {
+          "id": "B2",
+          "contract": "GET /admin/activity/signups",
+          "facts": [
+            { "k": "什么时候调", "v": "进入报名名单页、翻页时" },
+            { "k": "登录", "v": "后台登录" },
+            { "k": "分页", "v": "page 从 1 开始，每页 20 条" }
+          ],
+          "frontend": [
+            "状态显示：1 已报名、2 已取消、3 候补中",
+            "没有数据时显示「还没有人报名」"
+          ],
+          "example": {
+            "code": "OK",
+            "msg": "ok",
+            "data": {
+              "total": 2,
+              "list": [
+                { "signup_id": 502, "name": "李*", "phone": "138****0002", "status": 3, "create_time": "2026-11-18 09:12:00" },
+                { "signup_id": 501, "name": "王*", "phone": "138****0001", "status": 1, "create_time": "2026-11-17 20:05:00" }
+              ]
+            }
+          }
+        },
+        {
+          "id": "B3",
+          "removed": "这期不做，挪到二期"
+        }
+      ]
+    },
+    {
+      "id": "c",
+      "name": "C 端小程序",
+      "status": "todo",
+      "conventions": ["登录后请求头带 X-User-Token；活动详情不登录也能调"],
+      "flow": {
+        "nodes": [
+          { "id": "detail", "name": "活动详情页", "calls": ["C1"] },
+          { "id": "form", "name": "报名表弹窗", "calls": ["C2", "C5"] },
+          { "id": "mine", "name": "我的报名", "calls": ["C3", "C4"] }
+        ],
+        "edges": [
+          { "from": "detail", "to": "form", "label": "点「立即报名」或「排候补」" },
+          { "from": "form", "to": "detail", "label": "提交成功，刷新按钮和剩余名额", "back": true },
+          { "from": "mine", "to": "detail", "label": "点某一行" }
+        ]
+      },
+      "apis": [
+        {
+          "id": "C1",
+          "contract": "GET /activity/detail",
+          "change": "多返回 need_signup、remain_quota、signup_deadline、my_status；名额改名 max_quota，老字段 quota 11-25 以后删除",
+          "facts": [
+            { "k": "什么时候调", "v": "打开活动详情页；报名、排候补成功后再调一次" },
+            { "k": "登录", "v": "不用登录；登录了才返回 my_status" }
+          ],
+          "frontend": [
+            "need_signup 为 false 时，不显示报名区域",
+            "显示「剩余 N 个名额 · MM-dd HH:mm 截止」",
+            "名额改读 max_quota，不要再读 quota",
+            "按钮怎么显示见「详情页报名按钮」"
+          ],
+          "example": {
+            "code": "OK",
+            "msg": "ok",
+            "data": {
+              "id": 88,
+              "title": "古城夜游",
+              "start_time": "2026-11-21 19:00:00",
+              "quota": 50,
+              "max_quota": 50,
+              "need_signup": true,
+              "remain_quota": 38,
+              "signup_deadline": "2026-11-20 18:00:00",
+              "my_status": 0
+            }
+          }
+        },
+        {
+          "id": "C2",
+          "contract": "POST /activity/signup",
+          "facts": [
+            { "k": "什么时候调", "v": "报名表弹窗点「提交」，按钮是「立即报名」时" },
+            { "k": "登录", "v": "必须登录" }
+          ],
+          "frontend": [
+            "姓名、手机号默认填上次报名填的（前端本地记住）",
+            "成功后用返回的 remain_quota 刷新剩余名额，不用再调详情",
+            "返回 ACTIVITY_FULL 时，按钮改成「排候补」"
+          ],
+          "example": { "code": "OK", "msg": "ok", "data": { "signup_id": 501, "remain_quota": 37 } }
+        },
+        {
+          "id": "C3",
+          "contract": "GET /activity/my-signups",
+          "facts": [
+            { "k": "什么时候调", "v": "打开「我的报名」、下拉刷新、翻页时" },
+            { "k": "登录", "v": "必须登录" },
+            { "k": "分页", "v": "page 从 1 开始，每页 20 条" }
+          ],
+          "frontend": [
+            "状态 3 候补中显示「候补中，第 N 位」，N 取 waitlist_rank",
+            "离活动开始超过 24 小时、状态是已报名的，才显示「取消」按钮",
+            "没有数据时显示「还没有报过名」"
+          ],
+          "example": {
+            "code": "OK",
+            "msg": "ok",
+            "data": {
+              "total": 1,
+              "list": [
+                { "signup_id": 502, "activity_id": 88, "activity_title": "古城夜游", "start_time": "2026-11-21 19:00:00", "status": 3, "waitlist_rank": 2 }
+              ]
+            }
+          }
+        },
+        {
+          "id": "C4",
+          "contract": "POST /activity/signup/cancel",
+          "facts": [
+            { "k": "什么时候调", "v": "「我的报名」点「取消」并确认后" },
+            { "k": "登录", "v": "必须登录" }
+          ],
+          "frontend": [
+            "点「取消」先弹确认框：「取消后名额会给别人，确定取消吗？」",
+            "成功后这一行状态改成「已取消」，隐藏「取消」按钮"
+          ],
+          "example": { "code": "OK", "msg": "ok" }
+        },
+        {
+          "id": "C5",
+          "contract": "POST /activity/waitlist",
+          "facts": [
+            { "k": "什么时候调", "v": "报名表弹窗点「提交」，按钮是「排候补」时" },
+            { "k": "登录", "v": "必须登录" }
+          ],
+          "frontend": [
+            "成功后提示「已排候补，第 N 位」，N 取返回的 rank",
+            "返回 WAITLIST_FULL 时，按钮置灰，显示「名额已满」"
+          ],
+          "example": { "code": "OK", "msg": "ok", "data": { "signup_id": 502, "rank": 2 } }
+        }
+      ],
+      "guides": [
+        {
+          "id": "G1",
+          "title": "详情页报名按钮",
+          "head": ["情况", "按钮文字", "能不能点"],
+          "rows": [
+            ["need_signup 为 false", "不显示", "—"],
+            ["my_status 是 1", "已报名", "不能"],
+            ["my_status 是 3", "候补中", "不能"],
+            ["过了 signup_deadline", "报名已截止", "不能"],
+            ["remain_quota 大于 0", "立即报名", "能"],
+            ["remain_quota 是 0、候补没满", "排候补", "能"],
+            ["remain_quota 是 0、候补也满了", "名额已满", "不能"]
+          ],
+          "notes": ["从上往下判断，先命中哪一行就按哪一行显示", "候补满没满，详情接口不返回；先显示「排候补」，提交时返回 WAITLIST_FULL 再改"]
+        }
+      ]
+    }
+  ],
+  "error_codes": [
+    { "code": "ACTIVITY_FULL", "msg": "名额已满", "handle": "按钮改成「排候补」" },
+    { "code": "SIGNUP_CLOSED", "msg": "报名已截止", "handle": "按钮置灰，显示「报名已截止」" },
+    { "code": "ALREADY_SIGNED_UP", "msg": "你已经报过名了", "handle": "弹提示，按钮改成「已报名」" },
+    { "code": "CANCEL_TOO_LATE", "msg": "活动开始前 24 小时内不能取消", "handle": "弹提示，隐藏这一行的「取消」按钮" },
+    { "code": "WAITLIST_FULL", "msg": "候补已满", "handle": "按钮置灰，显示「名额已满」" }
+  ],
+  "changes": [
+    { "type": "add", "text": "C5 排候补：新接口；名额满了按钮变成「排候补」", "refs": ["C5", "G1"] },
+    { "type": "modify", "text": "C2 报名：返回多了 remain_quota（剩余名额），报名后不用再调详情", "refs": ["C2"] },
+    { "type": "modify", "text": "C1 活动详情：名额改名为 max_quota，老字段 quota 11-25 以后删除；my_status 多了 3 候补中", "refs": ["C1"] },
+    { "type": "modify", "text": "C3 我的报名：多返回 waitlist_rank（候补排第几）", "refs": ["C3"] },
+    { "type": "modify", "text": "B1 保存活动：名额改传 max_quota", "refs": ["B1"] },
+    { "type": "remove", "text": "B3 导出报名名单：这期不做", "refs": ["B3"] }
+  ]
+}

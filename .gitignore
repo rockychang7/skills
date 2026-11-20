@@ -11,3 +11,10 @@ Desktop.ini
 *.log
 *.tmp
 *.temp
+
+# Private notes and plans (not published)
+docs/
+
+# Python
+__pycache__/
+*.pyc
