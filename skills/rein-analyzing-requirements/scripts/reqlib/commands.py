@@ -310,6 +310,11 @@ def cmd_render(args: argparse.Namespace) -> int:
         elif page == "plan":
             write(page, names[page], render.plan_html(analysis, state, entry["v"], generated, texts, base,
                                                       base_analysis, pages))
+        elif page == "release":
+            rows = sql.release_rows(analysis, state, settings.envs(), entry["v"], load_version, texts, sql_files)
+            write(page, names[page], render.release_html(
+                analysis, state, entry["v"], generated, texts, sql.env_rows(state, settings.envs()), rows,
+                settings.config_center(), base, base_analysis, pages))
         else:
             for db, name in sql_files.items():
                 content = sql.build(analysis, db, entry["v"], generated, state["id"], state, settings.envs(),

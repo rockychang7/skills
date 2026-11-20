@@ -1,6 +1,6 @@
-"""Turning an analysis into the pages people read: the brief and the backend plan so far.
+"""Turning an analysis into the pages people read: brief, backend plan, release checklist.
 
-The SQL file is built in sql.py; render only lists it among the pages.
+The SQL file is built in sql.py; render lists it among the pages.
 
 A page is one HTML template (assets/templates) plus a JSON blob of data; the
 browser draws the page from the data. Text on the page comes from the language
@@ -24,7 +24,7 @@ from .output import issue
 
 ASSETS = Path(__file__).resolve().parents[2] / "assets"
 PAGES = ("brief", "plan", "sql", "release", "frontend")
-READY = ("brief", "plan", "sql")  # pages this version can generate
+READY = ("brief", "plan", "sql", "release")  # pages this version can generate
 SECTION_REF = re.compile(r"§\s*(\d+(?:\.\d+)*)")
 
 
@@ -143,6 +143,51 @@ def plan_html(
         if base and base_analysis is not None else None,
     }
     return _fill("plan", analysis, state["lang"], texts, data)
+
+
+def open_questions(analysis: dict[str, Any]) -> list[dict[str, Any]]:
+    """Open questions, each with `blocks`: the features and APIs it names, with their names."""
+    names = {x.get("id"): x.get("name") for x in (analysis.get("backend") or {}).get("apis") or []}
+    names.update({f.get("id"): f.get("name") for f in analysis.get("features") or []})
+    return [dict(q, blocks=[{"id": i, "name": names.get(i) or ""} for i in q.get("affects") or []])
+            for q in analysis.get("questions") or [] if q.get("status") == "open"]
+
+
+def release_html(
+    analysis: dict[str, Any],
+    state: dict[str, Any],
+    version: int,
+    generated: str,
+    texts: dict[str, Any],
+    envs: list[tuple[str, int | None]],
+    sql_rows: dict[str, list[dict[str, Any]]],
+    config_center: str | None = None,
+    base: dict[str, Any] | None = None,
+    base_analysis: dict[str, Any] | None = None,
+    pages: list[dict[str, Any]] | None = None,
+) -> str:
+    """The release checklist: steps by stage for the environment picked on the page.
+
+    `envs` is [(name, version it ran or None)]; `sql_rows` is sql.release_rows.
+    """
+    brief = [p.get("file") for p in pages or [] if p["page"] == "brief"]
+    data = {
+        "lang": state["lang"],
+        "t": texts["release"],
+        "meta": _meta(state, version, generated),
+        "pages": pages or [],
+        "brief_file": brief[0] if brief else None,
+        "envs": [{"name": e, "applied": v} for e, v in envs],
+        "config_center": config_center,
+        "sql": sql_rows,
+        "analysis": {"meta": analysis.get("meta"), "release": analysis.get("release") or [],
+                     "configs": (analysis.get("backend") or {}).get("configs") or [],
+                     "questions": open_questions(analysis)},
+        "changes": diffs.release_notes(analysis),
+        "diff": dict(diffs.compare_release(base_analysis, analysis), base=base)
+        if base and base_analysis is not None else None,
+    }
+    return _fill("release", analysis, state["lang"], texts, data)
 
 
 def write_page(folder: Path, name: str, content: str, state: dict[str, Any], version: int,

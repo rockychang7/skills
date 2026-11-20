@@ -107,6 +107,11 @@ class Settings:
             return envs
         return list(DEFAULT_ENVS)
 
+    def config_center(self) -> str | None:
+        """What the project calls the place configs live (Apollo, Nacos, …); None: the page's own word."""
+        value = self.profile.get("config_center")
+        return value.strip() if isinstance(value, str) and value.strip() else None
+
     def resolve(self, value: str) -> Path:
         return (self.cwd / Path(value).expanduser()).resolve()
 

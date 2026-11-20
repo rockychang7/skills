@@ -1,6 +1,7 @@
 """Compare two versions of an analysis item by item, for change marks on pages.
 
-`compare` is for the brief; `compare_backend` is the same for the backend plan.
+`compare` is for the brief; `compare_backend` and `compare_release` are the
+same for the backend plan and the release checklist.
 
 Items with IDs (features, questions, flows and their steps) are matched by ID.
 Lists without IDs (rules, examples, terms, …) are matched by content: equal
@@ -21,6 +22,8 @@ from __future__ import annotations
 import difflib
 import json
 from typing import Any
+
+from .sql import databases
 
 SIMILAR = 0.4  # text similarity above which a replaced item counts as modified
 FEATURE_LISTS = ("rules", "acceptance", "impact")
@@ -165,6 +168,60 @@ def new_notes(old: dict[str, Any], new: dict[str, Any]) -> list[dict[str, Any]]:
             break
         out.append(c)
     return out
+
+
+def release_keys(analysis: dict[str, Any]) -> set[str]:
+    """Release item IDs, config keys, table names and data tables: what the release checklist shows."""
+    be = analysis.get("backend") or {}
+    return ({x.get("id") for x in analysis.get("release") or []} | {x.get("key") for x in be.get("configs") or []}
+            | {x.get("name") for x in be.get("tables") or []} | {x.get("table") for x in be.get("data") or []}) - {None}
+
+
+def release_notes(analysis: dict[str, Any], notes: list[dict[str, Any]] | None = None) -> list[dict[str, Any]]:
+    """The change notes (all, or `notes`) that touch what the release checklist shows."""
+    keys = release_keys(analysis)
+    return [c for c in (analysis.get("changes") or [] if notes is None else notes)
+            if keys & set(c.get("refs") or [])]
+
+
+def compare_release(old: dict[str, Any], new: dict[str, Any]) -> dict[str, Any]:
+    """Change marks for the release checklist: its items, configs, and the SQL step of each database."""
+    items: dict[str, str] = {}
+    count = {"add": 0, "modify": 0, "remove": 0}
+
+    def hit(key: str, s: str) -> None:
+        items[key] = s
+        count[s] += 1
+
+    def by_key(new_items: Any, old_items: Any, key: str, prefix: str) -> None:
+        before = _by_id(old_items, key)
+        for x in new_items or []:
+            o = before.get(x.get(key))
+            if o is None:
+                hit(prefix + str(x.get(key)), "add")
+            elif x.get("removed") and not o.get("removed"):
+                hit(prefix + str(x.get(key)), "remove")
+            elif not x.get("removed") and _dump(o) != _dump(x):
+                hit(prefix + str(x.get(key)), "modify")
+
+    ob, nb = old.get("backend") or {}, new.get("backend") or {}
+    by_key(new.get("release"), old.get("release"), "id", "release:")
+    by_key(nb.get("configs"), ob.get("configs"), "key", "config:")
+
+    def db_part(analysis: dict[str, Any], db: str) -> str:
+        be = analysis.get("backend") or {}
+        return _dump([x for x in be.get("tables") or [] if (x.get("db") or "") == db]
+                     + [x for x in be.get("data") or [] if (x.get("db") or "") == db])
+
+    before = databases(old)
+    for db in databases(new):
+        if db not in before:
+            hit("sql:" + db, "add")
+        elif db_part(old, db) != db_part(new, db):
+            hit("sql:" + db, "modify")
+
+    return {"items": items, "total": sum(count.values()), **count,
+            "new_changes": len(release_notes(new, new_notes(old, new)))}
 
 
 API_FIELDS = ("name", "kind", "internal", "side", "path", "does", "now", "where", "depends")

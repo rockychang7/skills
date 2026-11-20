@@ -1,0 +1,791 @@
+<!doctype html>
+<html lang="__LANG__">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<!--PAGE-->
+<title>__TITLE__</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<style>
+/* Layout: the same frame as the brief and the backend plan (index rail + one
+   column). The toolbar picks the environment; everything below follows it.
+   The cover answers, in order: how many steps, can we release, what this
+   environment's SQL needs, how far along, what changed. Then the steps by
+   stage (before, deploy, after: tick as you go; rollback: fastest first),
+   each environment's config values, changes. */
+:root {
+  --ground: #f3f4f6;
+  --page: #ffffff;
+  --sunk: #f6f7f9;
+  --ink: #111926;
+  --ink-2: #434e5f;
+  --ink-3: #788294;
+  --rule: #e2e5ea;
+  --rule-2: #eef0f3;
+  --accent: #2747a8;
+  --accent-soft: #edf1fc;
+  --k-ask: #845200;  --k-ask-bg: #fcefc6;
+  --add: #12773b; --add-bg: #e0f2e6;
+  --mod: #ad4706; --mod-bg: #fdeadb;
+  --del: #b42318; --del-bg: #fbe5e2;
+  --p0: #bf2519;  --p0-bg: #fde7e4;
+  --test: #2747a8; --test-bg: #e6ecfb;
+  --av-0: #2747a8; --av-1: #12773b; --av-2: #7b37ad; --av-3: #845200; --av-4: #0b6e74;
+  --code-bg: #f6f7f9;
+  --flash: rgba(39, 71, 168, .14);
+  --lift: 0 1px 2px rgba(17, 25, 38, .04), 0 4px 18px rgba(17, 25, 38, .05);
+  --font: "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei UI", "Microsoft YaHei", "Noto Sans SC", "Source Han Sans SC", system-ui, sans-serif;
+  --mono: "JetBrains Mono", "SF Mono", "Cascadia Mono", Consolas, "Liberation Mono", monospace;
+  --r: 12px;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --ground: #0c1016; --page: #11161d; --sunk: #161c24;
+    --ink: #e4e8ee; --ink-2: #a9b2be; --ink-3: #7b8594;
+    --rule: #252d37; --rule-2: #1b222b;
+    --accent: #9fb3ff; --accent-soft: #1c2546;
+    --k-ask: #f0c15a; --k-ask-bg: #372a0e;
+    --add: #72d29b; --add-bg: #132e1e;
+    --mod: #f5a669; --mod-bg: #382313;
+    --del: #f28a80; --del-bg: #381a17;
+    --p0: #ff8a7f;  --p0-bg: #381a17;
+    --test: #9fb3ff; --test-bg: #1c2546;
+    --av-0: #9fb3ff; --av-1: #72d29b; --av-2: #d8a5f5; --av-3: #f0c15a; --av-4: #6fd3d9;
+    --code-bg: #0d1218;
+    --flash: rgba(159, 179, 255, .16);
+    --lift: none;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --ground: #0c1016; --page: #11161d; --sunk: #161c24;
+  --ink: #e4e8ee; --ink-2: #a9b2be; --ink-3: #7b8594;
+  --rule: #252d37; --rule-2: #1b222b;
+  --accent: #9fb3ff; --accent-soft: #1c2546;
+  --k-ask: #f0c15a; --k-ask-bg: #372a0e;
+  --add: #72d29b; --add-bg: #132e1e;
+  --mod: #f5a669; --mod-bg: #382313;
+  --del: #f28a80; --del-bg: #381a17;
+  --p0: #ff8a7f;  --p0-bg: #381a17;
+  --test: #9fb3ff; --test-bg: #1c2546;
+  --av-0: #9fb3ff; --av-1: #72d29b; --av-2: #d8a5f5; --av-3: #f0c15a; --av-4: #6fd3d9;
+  --code-bg: #0d1218;
+  --flash: rgba(159, 179, 255, .16);
+  --lift: none;
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body { margin: 0; background: var(--page); color: var(--ink); font: 15px/1.8 var(--font); }
+body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-area-inset-top, 0px); z-index: 10; background: var(--page); }
+a { color: var(--accent); text-decoration: none; }
+a:hover { text-decoration: underline; text-underline-offset: 3px; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 4px; }
+h1, h2, h3, h4 { margin: 0; text-wrap: balance; }
+p { margin: 0; }
+ul, ol { margin: 0; padding: 0; list-style: none; }
+button, input, select { font: inherit; color: inherit; }
+[hidden] { display: none !important; }
+code { font-family: var(--mono); font-size: .88em; background: var(--sunk); border: 1px solid var(--rule-2); border-radius: 5px; padding: 0 4px; }
+.mono, .id { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+.muted { color: var(--ink-3); }
+
+/* ---------- frame ---------- */
+.app { display: grid; grid-template-columns: 260px minmax(0, 1fr); min-height: 100vh; }
+.rail { position: sticky; top: 0; height: 100vh; overflow-y: auto; background: var(--ground); border-right: 1px solid var(--rule); padding: 22px 18px 28px 26px; }
+.main { min-width: 0; }
+.wrap { max-width: 960px; margin: 0 auto; padding-left: max(40px, env(safe-area-inset-left, 0px)); padding-right: max(40px, env(safe-area-inset-right, 0px)); }
+@media (max-width: 1080px) { .app { grid-template-columns: minmax(0, 1fr); } .rail { display: none; } }
+@media (max-width: 720px) { .wrap { padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); } }
+
+/* ---------- rail: the requirement's files, then this page's index ---------- */
+.files { display: grid; gap: 1px; padding-bottom: 16px; margin-bottom: 18px; border-bottom: 1px solid var(--rule); }
+.files-h { font-size: 11.5px; color: var(--ink-3); letter-spacing: .08em; margin-bottom: 4px; }
+.files > a, .files > span { display: grid; grid-template-columns: 18px minmax(0, 1fr); gap: 6px; padding: 4px 10px; margin-left: -10px; border-radius: 8px; font-size: 13.5px; color: var(--ink-2); }
+.files a:hover { background: var(--rule-2); text-decoration: none; }
+.files .on { background: var(--page); color: var(--ink); font-weight: 600; box-shadow: var(--lift); }
+.files .no { color: var(--ink-3); opacity: .7; }
+.files i { font-style: normal; font-family: var(--mono); font-size: 12px; color: var(--ink-3); }
+.rail-kind { font-size: 12px; color: var(--ink-3); letter-spacing: .1em; }
+.rail-title { font-size: 16px; font-weight: 700; line-height: 1.4; margin-top: 2px; }
+.rail-id { font-size: 11.5px; color: var(--ink-3); margin-top: 2px; overflow-wrap: anywhere; }
+.toc { margin-top: 18px; display: grid; gap: 1px; }
+.toc a { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 6px 10px; margin-left: -10px; border-radius: 8px; color: var(--ink-2); font-size: 14px; }
+.toc a:hover { background: var(--rule-2); text-decoration: none; }
+.toc a.on { background: var(--page); color: var(--ink); font-weight: 600; box-shadow: var(--lift); }
+.toc .n { font-size: 12px; color: var(--ink-3); font-variant-numeric: tabular-nums; }
+.toc .n.hot { color: var(--mod); font-weight: 700; }
+
+/* ---------- toolbar ---------- */
+.bar { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 6; background: color-mix(in srgb, var(--page) 88%, transparent); backdrop-filter: saturate(1.4) blur(10px); -webkit-backdrop-filter: saturate(1.4) blur(10px); border-bottom: 1px solid var(--rule); }
+.bar-in { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 14px; padding-block: 10px; }
+.search { position: relative; flex: 1 1 200px; min-width: 0; display: flex; align-items: center; }
+.search svg { position: absolute; left: 10px; width: 15px; height: 15px; color: var(--ink-3); pointer-events: none; }
+.search input { width: 100%; font-size: 14px; padding: 6px 34px 6px 32px; border: 1px solid var(--rule); border-radius: 9px; background: var(--sunk); color: var(--ink); }
+.search input:focus { outline: none; border-color: var(--accent); background: var(--page); box-shadow: 0 0 0 3px var(--accent-soft); }
+.search kbd { position: absolute; right: 8px; font-family: var(--mono); font-size: 11px; color: var(--ink-3); border: 1px solid var(--rule); border-radius: 5px; padding: 0 5px; line-height: 18px; background: var(--page); }
+.seg { display: inline-flex; padding: 3px; background: var(--rule-2); border-radius: 9px; }
+.seg button { border: 0; background: none; padding: 3px 11px; border-radius: 7px; font-size: 13px; color: var(--ink-2); cursor: pointer; white-space: nowrap; }
+.seg button[aria-pressed="true"] { background: var(--page); color: var(--ink); font-weight: 600; box-shadow: var(--lift); }
+.pick { font-size: 13px; padding: 4px 8px; border: 1px solid var(--rule); border-radius: 9px; background: var(--page); color: var(--ink); }
+.chgnav { display: inline-flex; align-items: center; gap: 4px; }
+.switch { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; color: var(--ink-2); cursor: pointer; user-select: none; white-space: nowrap; margin-right: 4px; }
+.switch input { appearance: none; -webkit-appearance: none; width: 32px; height: 19px; border-radius: 19px; background: var(--rule); position: relative; cursor: pointer; margin: 0; transition: background .15s; }
+.switch input::after { content: ""; position: absolute; top: 3px; left: 3px; width: 13px; height: 13px; border-radius: 50%; background: var(--page); transition: transform .15s; box-shadow: 0 1px 2px rgba(0, 0, 0, .25); }
+.switch input:checked { background: var(--mod); }
+.switch input:checked::after { transform: translateX(13px); }
+.icon-btn { display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px; border: 1px solid var(--rule); border-radius: 8px; background: var(--page); cursor: pointer; color: var(--ink-2); }
+.icon-btn:hover { border-color: var(--ink-3); color: var(--ink); }
+.icon-btn svg { width: 14px; height: 14px; }
+.chgpos { font-size: 12.5px; color: var(--mod); font-weight: 600; font-variant-numeric: tabular-nums; min-width: 3.6em; text-align: center; }
+@media (max-width: 560px) { .search { flex-basis: 100%; } }
+
+/* ---------- cover ---------- */
+.cover { padding-block: 40px 8px; }
+.cover-top { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 24px 40px; align-items: start; }
+@media (max-width: 860px) { .cover-top { grid-template-columns: minmax(0, 1fr); } }
+.kicker { font-size: 12.5px; color: var(--ink-3); letter-spacing: .06em; }
+.cover h1 { font-size: 34px; line-height: 1.22; margin: 8px 0 14px; letter-spacing: .01em; }
+.lead { font-size: 18px; line-height: 1.75; max-width: 34em; }
+.lead b { font-weight: 700; font-variant-numeric: tabular-nums; }
+.tblock { margin: 6px 0 0; display: grid; grid-template-columns: auto auto; border: 1px solid var(--rule); border-radius: 10px; overflow: hidden; font-size: 13px; min-width: 230px; }
+.tblock dt, .tblock dd { margin: 0; padding: 6px 12px; border-bottom: 1px solid var(--rule-2); }
+.tblock dt { color: var(--ink-3); background: var(--sunk); white-space: nowrap; }
+.tblock dd { font-family: var(--mono); font-size: 12.5px; white-space: nowrap; }
+.tblock dt:nth-last-child(2), .tblock dd:last-child { border-bottom: 0; }
+.tblock dd.send { font-family: var(--font); font-weight: 600; font-size: 13px; }
+.status { margin-top: 28px; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
+@media (max-width: 900px) { .status { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 520px) { .status { grid-template-columns: minmax(0, 1fr); } }
+.st { display: grid; align-content: start; gap: 1px; padding: 14px 16px; border-radius: var(--r); border: 1px solid var(--rule); color: var(--ink); background: var(--page); min-width: 0; }
+a.st:hover { text-decoration: none; border-color: var(--ink-3); }
+.st-l { font-size: 12.5px; color: var(--ink-3); }
+.st-v { font-size: 19px; font-weight: 700; line-height: 1.4; }
+.st-s { font-size: 13px; color: var(--ink-2); line-height: 1.6; }
+.st.go { background: var(--add-bg); border-color: transparent; } .st.go .st-v { color: var(--add); }
+.st.wait { background: var(--k-ask-bg); border-color: transparent; } .st.wait .st-v { color: var(--k-ask); }
+.st.chg .st-v { color: var(--mod); }
+.st.who .st-v { color: var(--k-ask); }
+.prog { display: flex; height: 8px; border-radius: 8px; overflow: hidden; background: var(--rule-2); margin: 8px 0 6px; }
+.prog i { display: block; height: 100%; }
+.prog .done { background: var(--add); }
+.prog .testing { background: var(--test); }
+.prog .doing { background: var(--mod); }
+.lgs { display: flex; flex-wrap: wrap; gap: 0 12px; font-size: 12.5px; color: var(--ink-2); font-variant-numeric: tabular-nums; }
+.lgs > span { white-space: nowrap; }
+.lg-dot { width: 8px; height: 8px; border-radius: 2px; display: inline-block; }
+.lg-dot.todo { background: var(--rule); box-shadow: inset 0 0 0 1px var(--ink-3); }
+.lg-dot.doing { background: var(--mod); } .lg-dot.testing { background: var(--test); } .lg-dot.done { background: var(--add); }
+.hold { margin-top: 12px; border-radius: var(--r); background: var(--k-ask-bg); padding: 12px 14px; }
+.hold h2 { font-size: 13px; font-weight: 700; color: var(--k-ask); letter-spacing: .06em; margin: 0 0 8px 2px; }
+.hold ul { display: grid; gap: 6px; }
+.hold li { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 2px 12px; align-items: baseline; padding: 9px 12px; border-radius: 9px; background: var(--page); }
+.hold li .hq { grid-column: 1 / -1; font-size: 13px; color: var(--ink-2); }
+
+/* ---------- shared bits ---------- */
+.mk { display: inline-flex; align-items: center; justify-content: center; min-width: 20px; height: 20px; padding: 0 5px; border-radius: 6px; font-size: 11.5px; font-weight: 700; line-height: 1; flex: none; }
+.mk-add { color: var(--add); background: var(--add-bg); }
+.mk-modify { color: var(--mod); background: var(--mod-bg); }
+.mk-remove { color: var(--del); background: var(--del-bg); }
+.ktag { display: inline-flex; align-items: center; font-size: 11.5px; font-weight: 600; padding: 0 7px; border-radius: 6px; line-height: 20px; white-space: nowrap; color: var(--ink-2); background: var(--rule-2); }
+.ktag.modify { color: var(--mod); background: var(--mod-bg); }
+.ktag.internal { color: var(--ink-2); background: transparent; box-shadow: inset 0 0 0 1px var(--rule); }
+.wait-chip { display: inline-flex; align-items: center; font-size: 11.5px; font-weight: 600; color: var(--k-ask); background: var(--k-ask-bg); padding: 0 7px; border-radius: 6px; line-height: 20px; white-space: nowrap; }
+.wait-chip.soft { color: var(--ink-2); background: var(--rule-2); font-weight: 500; }
+.sp { display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; font-weight: 600; white-space: nowrap; }
+.sp::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: currentColor; }
+.sp.todo { color: var(--ink-3); font-weight: 500; } .sp.todo::before { background: transparent; box-shadow: inset 0 0 0 1.5px currentColor; }
+.sp.doing { color: var(--mod); } .sp.testing { color: var(--test); } .sp.done { color: var(--add); }
+.av { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; white-space: nowrap; }
+.av b { display: inline-flex; align-items: center; justify-content: center; width: 20px; height: 20px; border-radius: 50%; font-size: 11px; font-weight: 700; color: var(--page); background: var(--c, var(--ink-3)); flex: none; }
+.av.none { color: var(--k-ask); }
+.av.none b { background: transparent; color: var(--k-ask); box-shadow: inset 0 0 0 1.5px currentColor; border: 0; }
+.fchip { display: inline-flex; align-items: baseline; gap: 5px; font-size: 12.5px; padding: 1px 9px; border-radius: 7px; background: var(--sunk); border: 1px solid var(--rule); color: var(--ink-2); white-space: nowrap; }
+a.fchip:hover { border-color: var(--accent); color: var(--accent); text-decoration: none; }
+.fchip .id { font-size: 11.5px; color: var(--accent); }
+.chips { display: flex; flex-wrap: wrap; gap: 4px 6px; }
+.ln { position: relative; }
+.ln.is-chg::before { content: ""; position: absolute; left: -12px; top: 5px; bottom: 5px; width: 3px; border-radius: 3px; background: var(--c, var(--mod)); }
+.chg-add { --c: var(--add); } .chg-modify { --c: var(--mod); } .chg-remove { --c: var(--del); }
+.was { display: block; margin-top: 1px; font-size: 13px; color: var(--ink-3); }
+.was s { text-decoration-color: color-mix(in srgb, var(--del) 55%, transparent); }
+.was b { font-weight: 500; margin-right: 6px; }
+.gone-t { text-decoration: line-through; color: var(--ink-3); }
+.flash { animation: flash 1.4s ease-out; }
+@keyframes flash { 0%, 40% { background: var(--flash); } 100% { background: transparent; } }
+@media (prefers-reduced-motion: reduce) { .flash { animation: none; outline: 2px solid var(--accent); } }
+
+/* ---------- sections ---------- */
+section { padding-top: 56px; scroll-margin-top: 64px; }
+.sec-h { margin-bottom: 20px; padding-bottom: 12px; border-bottom: 1px solid var(--rule); display: flex; flex-wrap: wrap; align-items: end; justify-content: space-between; gap: 10px 20px; }
+.sec-h h2 { font-size: 23px; line-height: 1.35; display: flex; align-items: baseline; gap: 10px; }
+.sec-h h2 .n { font-size: 14px; font-weight: 400; color: var(--ink-3); font-variant-numeric: tabular-nums; }
+.sec-h p { margin-top: 4px; font-size: 14px; color: var(--ink-3); }
+.part-h { font-size: 12px; font-weight: 700; color: var(--ink-3); letter-spacing: .08em; margin-bottom: 6px; }
+.nochange { display: none; color: var(--ink-3); font-size: 14px; }
+body.only-changes section[data-has-changes="0"] .sec-body { display: none; }
+body.only-changes section[data-has-changes="0"] .nochange { display: block; }
+body.only-changes [data-changed="0"] { display: none !important; }
+.client-h { display: flex; align-items: center; gap: 12px; margin: 34px 0 14px; font-size: 13px; font-weight: 700; color: var(--ink-2); letter-spacing: .04em; }
+.client-h:first-child { margin-top: 0; }
+.client-h::after { content: ""; flex: 1; height: 1px; background: var(--rule); }
+.client-h .n { font-weight: 400; color: var(--ink-3); }
+
+/* ---------- tables ---------- */
+.tbl { overflow-x: auto; border: 1px solid var(--rule); border-radius: 10px; }
+table { border-collapse: collapse; width: 100%; font-size: 14px; }
+th, td { text-align: left; padding: 8px 12px; border-top: 1px solid var(--rule-2); vertical-align: middle; }
+thead th { border-top: 0; font-size: 12px; color: var(--ink-3); font-weight: 600; background: var(--sunk); white-space: nowrap; }
+tbody th { font-weight: 400; }
+
+/* ---------- changes + basis ---------- */
+.cg + .cg { margin-top: 22px; }
+.cg h3 { font-size: 13px; font-weight: 700; margin-bottom: 4px; display: flex; gap: 8px; align-items: center; }
+.ci { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 4px 14px; align-items: baseline; padding: 8px 0; border-top: 1px solid var(--rule-2); }
+.ci .refs { display: inline-flex; flex-wrap: wrap; gap: 4px 10px; }
+.ci .refs a, .ci .refs span { font-family: var(--mono); font-size: 12px; }
+.earlier { margin-top: 18px; }
+.earlier > summary { cursor: pointer; color: var(--ink-2); font-size: 14px; }
+.basis { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 6px 22px; font-size: 14px; margin: 0; }
+.basis dt { color: var(--ink-3); }
+.basis dd { margin: 0; min-width: 0; overflow-wrap: anywhere; }
+.caveat { margin-top: 20px; font-size: 13.5px; color: var(--ink-2); background: var(--sunk); border-radius: var(--r); padding: 12px 16px; }
+.foot { height: 96px; }
+
+.copybox { position: fixed; left: -9999px; top: 0; width: 1px; height: 1px; }
+
+/* ---------- environment picker ---------- */
+.env-pick { display: inline-flex; align-items: center; gap: 10px; min-width: 0; }
+.env-pick > span { font-size: 13px; color: var(--ink-3); white-space: nowrap; }
+.seg.env button { padding: 4px 13px; font-size: 14px; display: inline-flex; align-items: baseline; gap: 7px; font-family: var(--mono); }
+.seg.env .ep { font-family: var(--font); font-size: 11.5px; font-weight: 500; color: var(--ink-3); font-variant-numeric: tabular-nums; }
+.seg.env button[aria-pressed="true"] .ep { color: var(--accent); }
+.seg.env .ep.all { color: var(--add); }
+.bar-in .spacer { flex: 1 1 0; }
+@media (max-width: 560px) { .bar-in .spacer { display: none; } }
+
+/* ---------- cover additions ---------- */
+.env-name { font-family: var(--mono); font-weight: 700; color: var(--accent); }
+.st.sql .st-v { color: var(--accent); }
+.st.ok .st-v { color: var(--add); }
+.st .prog { margin: 8px 0 4px; }
+.hold-p { font-size: 13px; color: var(--ink-2); margin: -2px 2px 8px; }
+
+/* ---------- steps ---------- */
+.stage-list { display: grid; gap: 10px; }
+.step { position: relative; display: grid; grid-template-columns: 34px 20px minmax(0, 1fr); gap: 0 10px; align-items: start; padding: 14px 18px 14px 6px; border: 1px solid var(--rule); border-radius: var(--r); background: var(--page); scroll-margin-top: 72px; transition: background .15s, border-color .15s, box-shadow .15s; }
+.step.rb { grid-template-columns: 20px minmax(0, 1fr); padding-left: 14px; }
+/* The tick area is the whole left strip of the step, not just the box. */
+.step .ck { align-self: stretch; display: flex; justify-content: center; padding-top: 3px; margin-block: -14px; padding-block: 17px 14px; border-radius: var(--r) 0 0 var(--r); cursor: pointer; }
+label.ck:hover { background: var(--rule-2); }
+.step.next { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+.ktag.next { color: var(--page); background: var(--accent); }
+.step .ck input { appearance: none; -webkit-appearance: none; width: 20px; height: 20px; margin: 0; border: 1.5px solid var(--ink-3); border-radius: 6px; background: var(--page); cursor: pointer; display: grid; place-items: center; transition: background .15s, border-color .15s; }
+.step .ck input::after { content: ""; width: 10px; height: 5px; border-left: 2px solid var(--page); border-bottom: 2px solid var(--page); transform: translateY(-1px) rotate(-45deg); opacity: 0; }
+.step .ck input:checked { background: var(--add); border-color: var(--add); }
+.step .ck input:checked::after { opacity: 1; }
+.step .no { font-family: var(--mono); font-size: 13px; color: var(--ink-3); padding-top: 4px; text-align: right; font-variant-numeric: tabular-nums; }
+.step-b { min-width: 0; }
+.step-t { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 8px; font-size: 15.5px; font-weight: 600; line-height: 1.6; }
+.step-t .txt { min-width: 0; overflow-wrap: anywhere; }
+.step-t .mk { align-self: center; }
+.step-d { margin-top: 2px; font-size: 14px; color: var(--ink-2); }
+.step-v { margin-top: 8px; padding-top: 8px; border-top: 1px dashed var(--rule); font-size: 13.5px; color: var(--ink-2); display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 0 12px; }
+.step-v > b { font-weight: 600; color: var(--ink-3); font-size: 12.5px; padding-top: 1px; }
+.step-v pre { margin: 6px 0 0; }
+@media (max-width: 560px) { .step-v { grid-template-columns: minmax(0, 1fr); } .step { padding-right: 14px; } }
+.step-links { margin-top: 6px; font-size: 13px; }
+.step.done { background: var(--sunk); border-color: var(--rule-2); }
+.step.done .step-t .txt, .step.done .step-d, .step.done .step-v { color: var(--ink-3); }
+.step.skip { background: transparent; border-style: dashed; }
+.step.skip .step-t { font-weight: 500; font-size: 14.5px; color: var(--ink-3); }
+.step.gone { background: transparent; border-style: dashed; }
+.step.gone .txt { text-decoration: line-through; color: var(--ink-3); }
+.step.is-chg { border-color: color-mix(in srgb, var(--c) 45%, var(--rule)); }
+.step.is-chg::before { content: ""; position: absolute; left: -1px; top: 12px; bottom: 12px; width: 3px; border-radius: 0 3px 3px 0; background: var(--c); }
+.ktag.sql { color: var(--accent); background: var(--accent-soft); }
+.ktag.config { color: var(--av-2); background: color-mix(in srgb, var(--av-2) 12%, var(--page)); }
+.ktag.deploy { color: var(--av-4); background: color-mix(in srgb, var(--av-4) 12%, var(--page)); }
+.ktag.fast { color: var(--add); background: var(--add-bg); }
+.tell { margin-top: 10px; display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; padding: 9px 12px; border-radius: 10px; background: var(--accent-soft); font-size: 13.5px; color: var(--ink-2); }
+.tell q { quotes: none; font-weight: 600; color: var(--ink); min-width: 0; overflow-wrap: anywhere; }
+.tell button { border: 1px solid var(--accent); color: var(--accent); background: var(--page); border-radius: 7px; padding: 1px 12px; font-size: 12.5px; cursor: pointer; }
+.stage-none { color: var(--ink-3); font-size: 14px; }
+.reset { border: 0; background: none; padding: 0; color: var(--ink-3); font-size: 13px; cursor: pointer; text-decoration: underline; text-underline-offset: 3px; }
+.reset:hover { color: var(--ink); }
+#rollback .stage-list { counter-reset: none; }
+
+/* ---------- copying ---------- */
+pre { margin: 8px 0 0; padding: 12px 14px; border-radius: 10px; background: var(--code-bg); border: 1px solid var(--rule-2); overflow-x: auto; font: 12.5px/1.65 var(--mono); color: var(--ink); }
+pre code { background: none; border: 0; padding: 0; font-size: inherit; }
+.main :not(pre) > code { cursor: copy; transition: background .12s, border-color .12s, color .12s; }
+.main :not(pre) > code:hover, .main :not(pre) > code:focus-visible { background: var(--accent-soft); border-color: color-mix(in srgb, var(--accent) 45%, var(--rule)); color: var(--accent); }
+.acts { margin-top: 10px; display: flex; flex-wrap: wrap; gap: 8px; }
+.btn { border: 1px solid var(--rule); background: var(--page); color: var(--ink-2); border-radius: 8px; padding: 2px 12px; font-size: 13px; line-height: 1.7; cursor: pointer; white-space: nowrap; }
+.btn:hover { border-color: var(--ink-3); color: var(--ink); }
+.btn.primary { border-color: var(--accent); color: var(--accent); font-weight: 600; }
+.btn.primary:hover { background: var(--accent-soft); }
+.pre { position: relative; margin-top: 8px; }
+.pre pre { margin: 0; padding-right: 72px; }
+.pre .pre-copy { position: absolute; top: 7px; right: 7px; padding: 0 9px; font-size: 12px; line-height: 1.8; }
+.step-v .pre { margin-top: 6px; }
+.toast { position: fixed; z-index: 20; left: 50%; bottom: calc(20px + env(safe-area-inset-bottom, 0px)); transform: translate(-50%, 8px); opacity: 0; pointer-events: none; max-width: calc(100% - 32px); padding: 8px 16px; border-radius: 10px; background: var(--ink); color: var(--page); font-size: 13.5px; box-shadow: 0 10px 28px rgba(0, 0, 0, .22); transition: opacity .15s, transform .15s; overflow-wrap: anywhere; }
+.toast.on { opacity: 1; transform: translate(-50%, 0); }
+@media (prefers-reduced-motion: reduce) { .toast { transition: none; } }
+
+/* ---------- config values ---------- */
+th.cur, td.cur { background: var(--accent-soft); }
+thead th.cur { color: var(--accent); }
+td.key { font-family: var(--mono); font-size: 13px; white-space: nowrap; }
+td.key .mk { margin-left: 6px; }
+td.does { min-width: 200px; color: var(--ink-2); }
+td.val code { white-space: nowrap; }
+tr.gone td.key { text-decoration: line-through; color: var(--ink-3); }
+tr.ln.is-chg td:first-child { box-shadow: inset 3px 0 0 var(--c); }
+tr.ln.is-chg::before { display: none; }
+
+@media print {
+  .rail, .bar { display: none !important; }
+  .app { display: block; }
+  .step { break-inside: avoid; }
+  section { padding-top: 28px; }
+}
+</style>
+<!--/HEAD-->
+</head>
+<body>
+<!--BODY-->
+<noscript><p style="padding:24px">__NOSCRIPT__</p></noscript>
+<div class="app">
+  <aside class="rail" id="rail"></aside>
+  <div class="main" id="main"></div>
+</div>
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+<script id="req-data" type="application/json">__REQ_DATA__</script>
+<script>
+(function () {
+  "use strict";
+  var D = JSON.parse(document.getElementById("req-data").textContent);
+  var A = D.analysis, T = D.t, M = D.meta, X = D.diff || { items: {} };
+  var KEY = "req-release:" + M.id;
+
+  /* ---------- helpers ---------- */
+  function t(k, v) {
+    var s = T[k];
+    if (s == null) return k;
+    return v ? s.replace(/\{(\w+)\}/g, function (_, n) { return v[n] == null ? "" : v[n]; }) : s;
+  }
+  function h(s) {
+    return String(s == null ? "" : s).replace(/[&<>"']/g, function (c) {
+      return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c];
+    });
+  }
+  // A text with HTML values put in: the text is escaped, the values are already HTML.
+  function th(k, v) { return h(T[k] == null ? k : T[k]).replace(/\{(\w+)\}/g, function (_, n) { return v && v[n] != null ? v[n] : ""; }); }
+  function rich(s) { return h(s).replace(/`([^`]+)`/g, "<code>$1</code>"); }
+  function code(s) { return "<code>" + h(s) + "</code>"; }
+  // A code block with its own copy button.
+  function preBlock(text, id, hidden) {
+    return '<div class="pre"' + (id ? ' id="' + id + '"' : "") + (hidden ? " hidden" : "") + "><pre><code>" + h(text) + "</code></pre>" +
+      '<button type="button" class="btn pre-copy" data-copy-pre>' + h(t("copy")) + "</button></div>";
+  }
+  function arr(x) { return Array.isArray(x) ? x : []; }
+  function $(s, el) { return (el || document).querySelector(s); }
+  function $$(s, el) { return Array.prototype.slice.call((el || document).querySelectorAll(s)); }
+  var store = {
+    get: function (k, d) { try { var v = localStorage.getItem(KEY + ":" + k); return v ? JSON.parse(v) : d; } catch (e) { return d; } },
+    set: function (k, v) { try { localStorage.setItem(KEY + ":" + k, JSON.stringify(v)); } catch (e) { /* storage off: ticks live until reload */ } }
+  };
+  var base = X.base;
+  var baseLabel = !base ? "" : base.kind === "send" ? t("base_send", { n: base.no, date: base.date }) : t("base_version", { v: base.v });
+  var baseVars = { base: baseLabel };
+  function state(key) { return base ? X.items[key] : undefined; }
+  function mark(s) { return base && s && s !== "same" ? '<span class="mk mk-' + s + '" title="' + h(t("mark_" + s + "_title", baseVars)) + '">' + h(t("mark_" + s)) + "</span>" : ""; }
+  function briefLink(prefix, id) { return D.brief_file ? h(D.brief_file) + "#" + prefix + h(id) : ""; }
+
+  /* ---------- model ---------- */
+  var ENVS = arr(D.envs).map(function (e) { return e.name; });
+  var env = store.get("env", null);
+  if (ENVS.indexOf(env) < 0) env = ENVS[ENVS.length - 1] || "";
+  var center = D.config_center || t("center");
+  var release = arr(A.release);
+  var configs = arr(A.configs);
+  var openP0 = arr(A.questions).filter(function (q) { return q.status === "open" && q.priority === "P0"; });
+  var onlyChanges = false;
+
+  function ticks(e) { return store.get("done:" + e, {}); }
+  function setTick(e, id, on) {
+    var d = ticks(e);
+    if (on) d[id] = true; else delete d[id];
+    store.set("done:" + e, d);
+  }
+
+  function sqlSteps(e) {
+    return arr(D.sql && D.sql[e]).map(function (r) {
+      var st = { id: "sql:" + r.db, type: "sql", s: state("sql:" + r.db), sql: r };
+      if (r.mode === "fresh" || r.mode === "catch") {
+        st.text = th(r.mode === "fresh" ? "sql_fresh" : "sql_catch", { file: code(r.file), from: h(r.from), v: h(M.analysis_v) });
+        var parts = [];
+        if (arr(r.new).length) parts.push(th("sql_new", { names: r.new.map(code).join(h(t("sep_list"))) }));
+        if (arr(r.alter).length) parts.push(th("sql_alter", { names: r.alter.map(code).join(h(t("sep_list"))) }));
+        if (r.data) parts.push(th("sql_data", { n: h(r.data) }));
+        st.detail = th("sql_n", { n: h(r.n), parts: parts.join(h(t("sep_list"))) });
+        st.stmts = r.text;
+        st.copyLabel = t("sql_copy", { n: r.n });
+        st.verify = h(t("sql_verify")) + (arr(r.checks).length ? "<br>" + h(t("sql_check")) + preBlock(r.checks.map(function (c) { return c.replace(/;?\s*$/, ";"); }).join("\n")) : "");
+        st.link = '<p class="step-links"><a href="' + h(r.file) + '">' + h(t("sql_open", { file: r.file })) + "</a></p>";
+      } else {
+        st.skip = true;
+        st.text = th(r.mode === "done" ? "sql_done" : "sql_same", { env: code(e), from: h(r.from) });
+      }
+      return st;
+    });
+  }
+  function configStep(e, c) {
+    var val = (c.values || {})[e];
+    return {
+      id: "cfg:" + c.key, type: "config", s: state("config:" + c.key),
+      text: th(c.kind === "modify" ? "cfg_modify" : "cfg_new", { center: h(center), key: code(c.key), val: code(val), old: code(c.old) }),
+      detail: rich(c.does),
+      verify: th("cfg_verify", { center: h(center), key: code(c.key), val: code(val) })
+    };
+  }
+  function aiStep(x) {
+    return { id: x.id, type: x.type || "other", s: state("release:" + x.id), text: rich(x.text), detail: x.detail ? rich(x.detail) : "",
+      verify: x.verify ? rich(x.verify) : "", gone: !!x.removed, why: x.removed };
+  }
+  function stagesFor(e) {
+    var S = { before: sqlSteps(e), deploy: [], after: [], rollback: [] };
+    configs.forEach(function (c) { if (!c.removed) S.before.push(configStep(e, c)); });
+    release.forEach(function (x) {
+      if (x.removed && state("release:" + x.id) !== "remove") return;  // dropped earlier: nothing to show
+      (S[x.stage] || S.after).push(aiStep(x));
+    });
+    configs.forEach(function (c) {
+      if (c.removed || c.kind !== "modify" || c.old == null) return;
+      S.rollback.push({ id: "cfgback:" + c.key, type: "config", s: state("config:" + c.key),
+        text: th("cfg_back", { key: code(c.key), old: code(c.old) }), verify: th("cfg_back_v", { center: h(center), old: code(c.old) }) });
+    });
+    arr(D.sql && D.sql[e]).forEach(function (r) {
+      S.rollback.push({ id: "sqlback:" + r.db, type: "sql", text: th("sql_back", { file: code(r.file) }), detail: h(t("sql_back_d")),
+        stmts: r.rollback, copyLabel: t("rb_copy") });
+    });
+    if (S.rollback.length) S.rollback[0].fast = true;
+    return S;
+  }
+  function todo(S) {
+    return S.before.concat(S.deploy, S.after).filter(function (st) { return !st.skip && !st.gone; });
+  }
+  function progress(e) {
+    var list = todo(stagesFor(e)), d = ticks(e), done = list.filter(function (st) { return d[st.id]; }).length;
+    return { done: done, n: list.length };
+  }
+
+  /* ---------- rail ---------- */
+  var SECTIONS = [
+    ["cover", "nav_cover"], ["before", "nav_before"], ["deploy", "nav_deploy"], ["after", "nav_after"],
+    ["rollback", "nav_rollback"], ["configs", "nav_configs"], ["changes", "nav_changes"], ["basis", "nav_basis"]
+  ];
+  function renderRail(S) {
+    var files = arr(D.pages).length > 1 ? '<div class="files"><div class="files-h">' + h(t("files_h")) + "</div>" + arr(D.pages).map(function (p, i) {
+      var inner = "<i>" + (i + 1) + "</i><span>" + h(p.label) + "</span>";
+      if (p.current) return '<span class="on">' + inner + "</span>";
+      return p.file ? '<a href="' + h(p.file) + '">' + inner + "</a>" : '<span class="no" title="' + h(t("file_none")) + '">' + inner + "</span>";
+    }).join("") + "</div>" : "";
+    var counts = { before: S.before.length, deploy: S.deploy.length, after: S.after.length, rollback: S.rollback.length, changes: base ? X.total : null };
+    $("#rail").innerHTML = files +
+      '<div class="rail-kind">' + h(t("kind")) + '</div><div class="rail-title">' + h(A.meta.title) + '</div><div class="rail-id mono">' + h(M.id) + "</div>" +
+      '<nav class="toc" aria-label="' + h(t("toc")) + '">' + SECTIONS.filter(function (s) { return document.getElementById(s[0]); }).map(function (s) {
+        var n = counts[s[0]];
+        return '<a href="#' + s[0] + '" data-toc="' + s[0] + '"><span>' + h(t(s[1])) + "</span>" +
+          (n ? '<span class="n' + (s[0] === "changes" ? " hot" : "") + '">' + n + "</span>" : "") + "</a>";
+      }).join("") + "</nav>";
+  }
+
+  /* ---------- toolbar ---------- */
+  function renderBar() {
+    var seg = '<div class="env-pick"><span id="env-label">' + h(t("env_label")) + '</span><div class="seg env" role="group" aria-labelledby="env-label">' + ENVS.map(function (e) {
+      var p = progress(e);
+      return '<button type="button" data-env="' + h(e) + '" aria-pressed="' + (e === env) + '">' + h(e) +
+        (p.n ? '<span class="ep' + (p.done === p.n ? " all" : "") + '">' + h(t("env_progress", p)) + "</span>" : "") + "</button>";
+    }).join("") + "</div></div>";
+    var nav = base && X.total ? '<div class="chgnav"><label class="switch"><input type="checkbox" id="only-changes"' + (onlyChanges ? " checked" : "") + ">" + h(t("only_changes")) + "</label>" +
+      '<button class="icon-btn" id="chg-prev" type="button" aria-label="' + h(t("chg_prev")) + '"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 10l4-4 4 4"/></svg></button>' +
+      '<span class="chgpos" id="chg-pos">' + X.total + "</span>" +
+      '<button class="icon-btn" id="chg-next" type="button" aria-label="' + h(t("chg_next")) + '"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 6l4 4 4-4"/></svg></button></div>' : "";
+    return '<div class="bar"><div class="wrap bar-in">' + seg + '<span class="spacer"></span>' + nav + "</div></div>";
+  }
+
+  /* ---------- cover ---------- */
+  function sqlCard(e) {
+    var rows = arr(D.sql && D.sql[e]);
+    var label = h(t("c_sql_l", { env: e }));
+    if (!rows.length) return '<div class="st"><span class="st-l">' + label + '</span><span class="st-v">' + h(t("c_sql_none")) + '</span><span class="st-s">' + h(t("c_sql_none_s")) + "</span></div>";
+    var fresh = rows.filter(function (r) { return r.mode === "fresh"; }), catchUp = rows.filter(function (r) { return r.mode === "catch"; });
+    var v, s, cls = "st sql";
+    if (fresh.length) { v = t("c_sql_fresh"); s = t("c_sql_fresh_s"); }
+    else if (catchUp.length) {
+      v = t("c_sql_catch", { n: catchUp.reduce(function (a, r) { return a + r.n; }, 0) });
+      s = t("c_sql_catch_s", { from: catchUp[0].from, v: M.analysis_v });
+    } else { v = t("c_sql_done"); s = t(rows[0].mode === "same" ? "c_sql_same_s" : "c_sql_done_s", { from: rows[0].from }); cls = "st ok"; }
+    return '<a class="' + cls + '" href="#before"><span class="st-l">' + label + '</span><span class="st-v">' + h(v) + '</span><span class="st-s">' + h(s) + "</span></a>";
+  }
+  function renderCover(S) {
+    var list = todo(S);
+    var lead = list.length ? th("lead", { env: '<span class="env-name">' + h(env) + "</span>", n: "<b>" + list.length + "</b>", a: "<b>" + S.after.length + "</b>", r: "<b>" + S.rollback.length + "</b>" }) :
+      th("lead_none", { env: '<span class="env-name">' + h(env) + "</span>" });
+    var tb = [
+      [t("tb_send"), M.send ? t("tb_send_v", { n: M.send.no, date: M.send.date }) : t("tb_draft"), "send"],
+      [t("tb_analysis"), "v" + M.analysis_v], [t("tb_doc"), "v" + M.doc_v], [t("tb_code"), A.meta.code_commit]
+    ].map(function (r) { return "<dt>" + h(r[0]) + '</dt><dd class="' + (r[2] || "") + '">' + h(r[1]) + "</dd>"; }).join("");
+    // An open P0 question holds back only what it names; the rest can go live.
+    var heldIds = [];
+    openP0.forEach(function (q) { arr(q.blocks).forEach(function (b) { if (heldIds.indexOf(b.id) < 0) heldIds.push(b.id); }); });
+    var c1 = '<a class="st go" href="' + (openP0.length ? "#hold" : "#before") + '"><span class="st-l">' + h(t("c_go_l")) + '</span><span class="st-v">' +
+      h(t("c_go")) + '</span><span class="st-s">' + h(openP0.length ? t("c_go_part_s", { ids: heldIds.join(t("sep_list")), q: openP0.map(function (q) { return q.id; }).join(t("sep_list")) }) : t("c_go_s")) + "</span></a>";
+    var p = progress(env);
+    var c3 = '<a class="st" href="#before"><span class="st-l">' + h(t("c_prog_l", { env: env })) + '</span><span class="st-v">' + h(t("c_prog_v", p)) + "</span>" +
+      '<span class="prog" aria-hidden="true">' + (p.done ? '<i class="done" style="width:' + (p.done / (p.n || 1) * 100) + '%"></i>' : "") + '</span><span class="st-s">' + h(t("c_prog_s")) + "</span></a>";
+    var c4 = base ?
+      '<a class="st chg" href="#changes" id="c-chg"><span class="st-l">' + h(t("c_chg_l", baseVars)) + '</span><span class="st-v">' + h(t("c_chg_v", { n: X.total })) + '</span><span class="st-s">' + h(t("c_chg_s")) + "</span></a>" :
+      '<div class="st"><span class="st-l">' + h(t("tb_send")) + '</span><span class="st-v">' + h(t("c_draft")) + '</span><span class="st-s">' + h(t("c_draft_s")) + "</span></div>";
+    var hold = openP0.length ? '<div class="hold" id="hold"><h2>' + h(t("hold_h")) + '</h2><p class="hold-p">' + h(t("hold_p")) + "</p><ul>" + openP0.map(function (q) {
+      var what = arr(q.blocks).map(function (b) { return '<span class="id">' + h(b.id) + "</span> " + h(b.name); }).join(h(t("sep_list"))) || '<span class="id">' + h(q.id) + "</span>";
+      return "<li><span>" + what + '</span><span class="wait-chip">' + h(t("hold_wait", { q: q.id })) + '</span><span class="hq">' + h(q.title) + " " +
+        (D.brief_file ? '<a href="' + briefLink("q-", q.id) + '">' + h(t("to_brief")) + "</a>" : "") + "</span></li>";
+    }).join("") + "</ul></div>" : "";
+    return '<header class="cover wrap" id="cover"><div class="cover-top"><div>' +
+      '<div class="kicker">' + h(M.send ? t("kicker", { n: M.send.no, date: M.send.date }) : t("kicker_draft")) + "</div>" +
+      "<h1>" + h(A.meta.title) + '</h1><p class="lead">' + lead + "</p></div>" +
+      '<dl class="tblock">' + tb + "</dl></div>" +
+      '<div class="status">' + c1 + sqlCard(env) + c3 + c4 + "</div>" + hold + "</header>";
+  }
+
+  /* ---------- stages ---------- */
+  function section(id, title, n, sub, body, hasChanges, tools) {
+    return '<section id="' + id + '" class="wrap" data-has-changes="' + (hasChanges ? 1 : 0) + '"><div class="sec-h"><div><h2>' + h(title) +
+      (n ? '<span class="n">' + n + "</span>" : "") + "</h2>" + (sub ? "<p>" + h(sub) + "</p>" : "") + "</div>" + (tools || "") + "</div>" +
+      '<p class="nochange">' + h(t("nochange")) + '</p><div class="sec-body">' + body + "</div></section>";
+  }
+  function stepHtml(st, no, checkable, d) {
+    var done = checkable && !st.skip && !st.gone && !!d[st.id];
+    var cls = "step" + (checkable ? "" : " rb") + (st.skip ? " skip" : "") + (st.gone ? " gone" : "") + (done ? " done" : "") + (base && st.s ? " is-chg chg-" + st.s : "");
+    // The whole left strip of a step is the tick area.
+    var ck = checkable ? (st.skip || st.gone ? '<span class="ck"></span>' : '<label class="ck">' +
+      '<input type="checkbox" id="ck-' + h(st.id) + '" data-step="' + h(st.id) + '"' + (done ? " checked" : "") + ' aria-label="' + h(no + ". " + t("type_" + st.type)) + '"></label>') : "";
+    var pid = "pre-" + String(st.id).replace(/[^\w-]/g, "_");
+    var acts = st.stmts ? '<div class="acts"><button type="button" class="btn primary" data-copy-target="' + pid + '">' + h(st.copyLabel) + "</button>" +
+      '<button type="button" class="btn" data-toggle="' + pid + '" aria-expanded="false" aria-controls="' + pid + '">' + h(t("sql_show")) + "</button></div>" + preBlock(st.stmts, pid, true) : "";
+    var tags = '<span class="ktag ' + h(st.type) + '">' + h(t("type_" + st.type)) + "</span>" + (st.fast ? '<span class="ktag fast">' + h(t("fast")) + "</span>" : "");
+    var tell = st.sql && !st.skip ? '<div class="tell" data-tell="' + h(st.id) + '"' + (done ? "" : " hidden") + "><span>" + h(t("tell")) + "</span><q>" +
+      h(t("tell_text", { title: A.meta.title, id: M.id, env: env, v: M.analysis_v })) + '</q><button type="button" data-copy>' + h(t("copy")) + "</button></div>" : "";
+    return '<li class="' + cls + '" data-changed="' + (base && st.s ? 1 : 0) + '">' + ck + '<span class="no">' + (no || "") + "</span>" +
+      '<div class="step-b"><div class="step-t">' + tags + '<span class="txt">' + st.text + "</span>" + mark(st.s) + "</div>" +
+      (st.gone ? '<p class="step-d">' + h(t("removed_why", { why: st.why })) + "</p>" : "") +
+      (st.detail ? '<p class="step-d">' + st.detail + "</p>" : "") + acts +
+      (st.verify ? '<div class="step-v"><b>' + h(t("verify")) + "</b><div>" + st.verify + "</div></div>" : "") +
+      (st.link || "") + tell + "</div></li>";
+  }
+  function renderStages(S) {
+    var d = ticks(env), no = 0;
+    function list(steps, checkable) {
+      if (!steps.length) return '<p class="stage-none">' + h(t("stage_none")) + "</p>";
+      var i = 0;
+      return '<ol class="stage-list">' + steps.map(function (st) {
+        var n = st.skip || st.gone ? 0 : checkable ? ++no : ++i;
+        return stepHtml(st, n, checkable, d);
+      }).join("") + "</ol>";
+    }
+    function changed(steps) { return steps.some(function (st) { return base && st.s; }); }
+    var reset = '<div class="sec-tools"><button type="button" class="reset" id="reset">' + h(t("reset", { env: env })) + "</button></div>";
+    return section("before", t("before_h"), S.before.length, t("before_p"), list(S.before, true), changed(S.before), reset) +
+      section("deploy", t("deploy_h"), S.deploy.length, t("deploy_p"), list(S.deploy, true), changed(S.deploy)) +
+      section("after", t("after_h"), S.after.length, t("after_p"), list(S.after, true), changed(S.after)) +
+      section("rollback", t("rollback_h"), S.rollback.length, t("rollback_p"), list(S.rollback, false), changed(S.rollback));
+  }
+
+  /* ---------- config values ---------- */
+  function renderConfigs() {
+    var shown = configs.filter(function (c) { return !c.removed || state("config:" + c.key) === "remove"; });
+    if (!shown.length) return "";
+    var hasOld = shown.some(function (c) { return c.kind === "modify"; });
+    var head = '<th scope="col">' + h(t("col_key")) + '</th><th scope="col">' + h(t("col_does")) + "</th>" + ENVS.map(function (e) {
+      return '<th scope="col"' + (e === env ? ' class="cur"' : "") + ">" + h(e) + "</th>";
+    }).join("") + (hasOld ? '<th scope="col">' + h(t("col_old")) + "</th>" : "");
+    var rows = shown.map(function (c) {
+      var s = state("config:" + c.key);
+      return '<tr class="ln' + (c.removed ? " gone" : "") + (base && s ? " is-chg chg-" + s : "") + '" data-changed="' + (base && s ? 1 : 0) + '"><td class="key">' + h(c.key) + mark(s) + '</td><td class="does">' + rich(c.removed ? t("removed_why", { why: c.removed }) : c.does) + "</td>" +
+        ENVS.map(function (e) { var v = (c.values || {})[e]; return '<td class="val' + (e === env ? " cur" : "") + '">' + (v == null ? '<span class="muted">—</span>' : code(v)) + "</td>"; }).join("") +
+        (hasOld ? '<td class="val">' + (c.kind === "modify" && c.old != null ? code(c.old) : '<span class="muted">—</span>') + "</td>" : "") + "</tr>";
+    }).join("");
+    return section("configs", t("configs_h"), null, t("configs_p"), '<div class="tbl"><table><thead><tr>' + head + "</tr></thead><tbody>" + rows + "</tbody></table></div>",
+      shown.some(function (c) { return base && state("config:" + c.key); }));
+  }
+
+  /* ---------- changes + basis ---------- */
+  function renderChanges() {
+    var all = arr(D.changes);
+    var n = base ? (X.new_changes || 0) : all.length;
+    var recent = all.slice(0, n), earlier = all.slice(n);
+    function item(c) {
+      return '<div class="ci"><span>' + rich(c.text) + '</span><span class="refs">' + arr(c.refs).map(function (r) { return "<span>" + h(r) + "</span>"; }).join("") + "</span></div>";
+    }
+    function grouped(list) {
+      return ["add", "modify", "remove"].map(function (type) {
+        var l = list.filter(function (c) { return c.type === type; });
+        return l.length ? '<div class="cg"><h3>' + mark(type) + h(t("change_" + type)) + "</h3>" + l.map(item).join("") + "</div>" : "";
+      }).join("");
+    }
+    var body = (recent.length ? grouped(recent) : '<p class="muted">' + h(t("changes_none")) + "</p>") +
+      (earlier.length ? '<details class="earlier"><summary>' + h(t("changes_earlier", { n: earlier.length })) + "</summary>" + grouped(earlier) + "</details>" : "");
+    return section("changes", t("changes_h"), base ? X.total : null, base ? t("changes_since", baseVars) : t("changes_all"), body, true);
+  }
+  function renderBasis() {
+    var rows = [
+      [t("b_req"), A.meta.title + " · " + M.id],
+      [t("b_analysis"), "v" + M.analysis_v + " · " + M.generated],
+      [t("b_doc"), "v" + M.doc_v + (A.meta.doc_version ? " · " + A.meta.doc_version : "")],
+      [t("b_code"), A.meta.code_commit]
+    ].map(function (r) { return "<dt>" + h(r[0]) + "</dt><dd>" + h(r[1]) + "</dd>"; }).join("");
+    return section("basis", t("basis_h"), null, null, '<dl class="basis">' + rows + '</dl><p class="caveat">' + h(t("caveat")) + "</p>", false) + '<div class="foot"></div>';
+  }
+
+  /* ---------- render ---------- */
+  var io = null;
+  function renderAll() {
+    var S = stagesFor(env);
+    $("#main").innerHTML = renderBar() + renderCover(S) + renderStages(S) + renderConfigs() + renderChanges() + renderBasis();
+    renderRail(S);
+    document.body.classList.toggle("only-changes", onlyChanges);
+    if (window.IntersectionObserver) {
+      if (io) io.disconnect();
+      var links = $$("[data-toc]");
+      io = new IntersectionObserver(function (entries) {
+        entries.forEach(function (en) {
+          if (en.isIntersecting) links.forEach(function (a) { a.classList.toggle("on", a.dataset.toc === en.target.id); });
+        });
+      }, { rootMargin: "-20% 0px -70% 0px" });
+      SECTIONS.forEach(function (s) { var el = document.getElementById(s[0]); if (el) io.observe(el); });
+    }
+  }
+  // The first step not ticked yet is the next one.
+  function markNext() {
+    $$(".step.next").forEach(function (li) { li.classList.remove("next"); var tag = $(".ktag.next", li); if (tag) tag.remove(); });
+    var first = $$("#before .step, #deploy .step, #after .step").filter(function (li) { var c = $("input[data-step]", li); return c && !c.checked; })[0];
+    if (first) {
+      first.classList.add("next");
+      $(".step-t", first).insertAdjacentHTML("afterbegin", '<span class="ktag next">' + h(t("next")) + "</span>");
+    }
+  }
+  // Names and values in grey are copied with one click (or Enter).
+  function prepareCodes() {
+    $$("#main code").forEach(function (c) {
+      if (c.closest("pre")) return;
+      c.tabIndex = 0;
+      c.setAttribute("role", "button");
+      c.title = t("copy_hint");
+    });
+  }
+  function afterRender() { prepareCodes(); markNext(); }
+  renderAll();
+  afterRender();
+
+  /* ---------- events ---------- */
+  var toastTimer = null;
+  function toast(msg) {
+    var el = $("#toast");
+    el.textContent = msg;
+    el.classList.add("on");
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(function () { el.classList.remove("on"); }, 1800);
+  }
+  // Copy `text`; tell the user with a toast. `source` is selected when the browser refuses.
+  function copy(text, what, source) {
+    function done() { toast(what); }
+    function fallback() {
+      var box = document.createElement("textarea");
+      box.className = "copybox"; box.value = text; document.body.appendChild(box); box.select();
+      var ok = false;
+      try { ok = document.execCommand("copy"); } catch (err) { ok = false; }
+      box.remove();
+      if (ok) { done(); return; }
+      if (source) { var r = document.createRange(); r.selectNodeContents(source); var sel = window.getSelection(); sel.removeAllRanges(); sel.addRange(r); }
+      toast(t("copy_failed"));
+    }
+    if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(text).then(done, fallback);
+    else fallback();
+  }
+  function lines(text) { return t("copied_lines", { n: text.split("\n").filter(function (l) { return l.trim() && !/^--/.test(l.trim()); }).length }); }
+  function copyCode(c) { copy(c.textContent, t("copied_toast", { what: c.textContent }), c); }
+  var armed = null;
+  var pos = -1;
+  function changedEls() { return $$(".is-chg").filter(function (el) { return el.offsetParent !== null; }); }
+  function go(step) {
+    var list = changedEls();
+    if (!list.length) return;
+    pos = (pos + step + list.length) % list.length;
+    var el = list[pos];
+    el.scrollIntoView({ block: "center", behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" });
+    el.classList.remove("flash"); void el.offsetWidth; el.classList.add("flash");
+    var p = $("#chg-pos"); if (p) p.textContent = (pos + 1) + " / " + list.length;
+  }
+  document.addEventListener("click", function (e) {
+    if (!e.target.closest) return;
+    var c = e.target.closest("code");
+    if (c && !c.closest("pre") && c.closest("#main")) { copyCode(c); return; }
+    var b = e.target.closest("button, a");
+    if (!b) return;
+    if (b.dataset.env) {
+      env = b.dataset.env; store.set("env", env); pos = -1;
+      renderAll();
+      afterRender();
+      return;
+    }
+    if (b.hasAttribute("data-copy")) { var q = $("q", b.parentNode); copy(q.textContent, t("copied_toast", { what: q.textContent }), q); return; }
+    if (b.dataset.copyTarget) { var box = document.getElementById(b.dataset.copyTarget), txt = $("pre", box).textContent; copy(txt, lines(txt), $("pre", box)); return; }
+    if (b.hasAttribute("data-copy-pre")) { var pre = $("pre", b.parentNode); copy(pre.textContent, lines(pre.textContent), pre); return; }
+    if (b.dataset.toggle) {
+      var target = document.getElementById(b.dataset.toggle), open = target.hidden;
+      target.hidden = !open;
+      b.setAttribute("aria-expanded", String(open));
+      b.textContent = t(open ? "sql_hide" : "sql_show");
+      return;
+    }
+    if (b.id === "reset") {
+      // Two clicks within three seconds: ticks are lost for good.
+      if (armed) { clearTimeout(armed); armed = null; store.set("done:" + env, {}); renderAll(); afterRender(); return; }
+      b.textContent = t("reset_confirm", { env: env });
+      armed = setTimeout(function () { armed = null; var r = $("#reset"); if (r) r.textContent = t("reset", { env: env }); }, 3000);
+      return;
+    }
+    if (b.id === "chg-prev") { go(-1); return; }
+    if (b.id === "chg-next") { go(1); return; }
+    if (b.id === "c-chg" && $("#only-changes")) { onlyChanges = true; $("#only-changes").checked = true; document.body.classList.add("only-changes"); pos = -1; }
+  });
+  document.addEventListener("change", function (e) {
+    var el = e.target;
+    if (el.id === "only-changes") { onlyChanges = el.checked; document.body.classList.toggle("only-changes", onlyChanges); pos = -1; return; }
+    if (!el.dataset || !el.dataset.step) return;
+    setTick(env, el.dataset.step, el.checked);
+    var li = el.closest(".step");
+    li.classList.toggle("done", el.checked);
+    var tell = $("[data-tell]", li);
+    if (tell) tell.hidden = !el.checked;
+    // Counts on the cover and the environment buttons follow the ticks.
+    var y = window.scrollY, S = stagesFor(env);
+    $("#cover").outerHTML = renderCover(S);
+    $(".bar").outerHTML = renderBar();
+    window.scrollTo(0, y);
+    afterRender();
+  });
+  document.addEventListener("keydown", function (e) {
+    var c = e.target;
+    if ((e.key === "Enter" || e.key === " ") && c.tagName === "CODE" && c.closest("#main")) { e.preventDefault(); copyCode(c); }
+  });
+})();
+</script>
+<!--/BODY-->
+</body>
+</html>

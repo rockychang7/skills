@@ -14,6 +14,7 @@ committed and teammates share it.
 | `clients` | you | The project's frontends, `[{"id": "b", "name": "B 端后台"}]`; use these IDs and names in the analysis `clients` | find them in the code |
 | `facts` | you | A file describing where this project keeps its facts; read it before checking the code | this skill's own list |
 | `table_rules` | you | The team's table conventions; read it before writing `backend.tables` | none |
+| `config_center` | script | What the team calls the place configs live (`Apollo`, `Nacos`); the release checklist uses it in its config steps | a generic word |
 
 ```json
 {

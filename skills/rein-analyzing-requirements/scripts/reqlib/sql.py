@@ -143,6 +143,95 @@ def problems(analysis: dict[str, Any], state: dict[str, Any],
     return out
 
 
+def _tx(t: dict[str, str], key: str, **values: Any) -> str:
+    text = t[key]
+    for k, v in values.items():
+        text = text.replace("{%s}" % k, str(v))
+    return text
+
+
+def _parts(analysis: dict[str, Any], db: str) -> tuple[list[dict], list[dict], list[dict]]:
+    """New tables, altered tables and data changes of one database, in analysis order."""
+    be = analysis.get("backend") or {}
+    tables = [x for x in _live(be.get("tables")) if _db(x) == db]
+    data = [d for d in be.get("data") or [] if isinstance(d, dict) and _db(d) == db]
+    return ([x for x in tables if x.get("kind") == "new"], [x for x in tables if x.get("kind") == "alter"], data)
+
+
+def _table_label(t: dict[str, str], x: dict[str, Any]) -> str:
+    return _tx(t, "table_line", name=x.get("name"), title=_one_line(x.get("title")))
+
+
+def _data_label(t: dict[str, str], d: dict[str, Any], note: str = "") -> str:
+    return _tx(t, "data_line", table=d.get("table"), kind=t["d_" + str(d.get("kind"))] + note,
+               does=_one_line(d.get("does")))
+
+
+def rollback_steps(analysis: dict[str, Any], db: str, t: dict[str, str]) -> list[tuple[str, list[str]]]:
+    """Section 6 as (label, statements), newest change first: data, then altered tables, then new tables."""
+    new_tables, alter_tables, data = _parts(analysis, db)
+    steps: list[tuple[str, list[str]]] = []
+    for d in reversed(data):
+        steps.append((_tx(t, "rb_data", kind=t["d_" + str(d.get("kind"))], table=d.get("table")),
+                      [statement(d["rollback"])] if d.get("rollback") else []))
+    for x in reversed(alter_tables):
+        steps.append((_tx(t, "rb_alter", name=x.get("name")), [statement(x["rollback"])] if x.get("rollback") else []))
+    for x in reversed(new_tables):
+        steps.append((_tx(t, "rb_drop", name=x.get("name")), ["DROP TABLE IF EXISTS %s;" % x.get("name")]))
+    return steps
+
+
+def _block(label: str, statements: list[Any]) -> str:
+    return "\n".join(["-- " + label] + [statement(s) for s in statements])
+
+
+def env_row(analysis: dict[str, Any], db: str, file: str, version: int, ran: int | None,
+            load_version: Callable[[int], dict[str, Any]], texts: dict[str, Any]) -> dict[str, Any]:
+    """What one environment runs in one database, for the release checklist.
+
+    mode: fresh (no record: sections 1-4), catch (ran an older version:
+    its group in section 5), same (ran an older version, nothing to run),
+    done (ran this version). `text` is what to run, `rollback` section 6.
+    """
+    t = texts["sql"]
+    new_tables, alter_tables, data = _parts(analysis, db)
+    row: dict[str, Any] = {"db": db, "file": file, "rollback": "\n\n".join(
+        _block(label, stmts) if stmts else "-- %s\n-- %s" % (label, t["rb_manual"])
+        for label, stmts in rollback_steps(analysis, db, t))}
+    if ran is None:
+        blocks = [_block(_table_label(t, x), [x.get("sql")]) for x in new_tables + alter_tables]
+        blocks += [_block(_table_label(t, x), x["init"]) for x in new_tables if x.get("init")]
+        blocks += [_block(_data_label(t, d), [d.get("sql")]) for d in data]
+        row.update(mode="fresh", n=len(new_tables) + len(alter_tables) + len(data)
+                   + sum(len(x.get("init") or []) for x in new_tables),
+                   new=[x.get("name") for x in new_tables], alter=[x.get("name") for x in alter_tables],
+                   data=len(data), checks=[d["check"] for d in data if d.get("check")], text="\n\n".join(blocks))
+        return row
+    row["from"] = ran
+    if ran >= version:
+        row["mode"] = "done"
+        return row
+    c = catch_up(load_version(ran), analysis, db)
+    n = sum(len(stmts) for _, _, stmts in c["tables"]) + len(c["data"])
+    if not n:
+        row["mode"] = "same"
+        return row
+    blocks = [_block(_table_label(t, x), stmts) for x, _, stmts in c["tables"]]
+    blocks += [_block(_data_label(t, d), [d.get("sql")]) for d in c["data"]]
+    row.update(mode="catch", n=n, new=[x.get("name") for x, how, _ in c["tables"] if how == "whole"],
+               alter=[x.get("name") for x, how, _ in c["tables"] if how == "patch"], data=len(c["data"]),
+               checks=[d["check"] for d in c["data"] if d.get("check")], text="\n\n".join(blocks))
+    return row
+
+
+def release_rows(analysis: dict[str, Any], state: dict[str, Any], envs: list[str], version: int,
+                 load_version: Callable[[int], dict[str, Any]], texts: dict[str, Any],
+                 files: dict[str, str]) -> dict[str, list[dict[str, Any]]]:
+    """For every environment, one `env_row` per database."""
+    return {env: [env_row(analysis, db, name, version, ran, load_version, texts) for db, name in files.items()]
+            for env, ran in env_rows(state, envs)}
+
+
 def build(
     analysis: dict[str, Any],
     db: str,
@@ -158,16 +247,9 @@ def build(
     t = texts["sql"]
 
     def tx(key: str, **values: Any) -> str:
-        text = t[key]
-        for k, v in values.items():
-            text = text.replace("{%s}" % k, str(v))
-        return text
+        return _tx(t, key, **values)
 
-    be = analysis.get("backend") or {}
-    tables = [x for x in _live(be.get("tables")) if _db(x) == db]
-    new_tables = [x for x in tables if x.get("kind") == "new"]
-    alter_tables = [x for x in tables if x.get("kind") == "alter"]
-    data = [d for d in be.get("data") or [] if isinstance(d, dict) and _db(d) == db]
+    new_tables, alter_tables, data = _parts(analysis, db)
     title = (analysis.get("meta") or {}).get("title", "")
     lines: list[str] = []
 
@@ -185,14 +267,10 @@ def build(
         blank()
 
     def table_label(x: dict[str, Any]) -> str:
-        return tx("table_line", name=x.get("name"), title=_one_line(x.get("title")))
-
-    def data_label(d: dict[str, Any], note: str = "") -> str:
-        return tx("data_line", table=d.get("table"), kind=t["d_" + str(d.get("kind"))] + note,
-                  does=_one_line(d.get("does")))
+        return _table_label(t, x)
 
     def data_block(d: dict[str, Any], note: str = "") -> None:
-        comment(data_label(d, note))
+        comment(_data_label(t, d, note))
         lines.append(statement(d.get("sql")))
         if d.get("check"):
             comment(t["check"])
@@ -220,7 +298,8 @@ def build(
                 catch[v] = catch_up(load_version(v), analysis, db)
             c = catch[v]
             if c["tables"] or c["data"] or c["gone"]:
-                groups.setdefault(v, []).append(env)
+                groups.setdefault(v, []).append(env)  # a dropped table alone still gets its note
+            if c["tables"] or c["data"]:
                 comment("  " + tx("env_at", env=name, n=v, v=version))
             else:
                 comment("  " + tx("env_same", env=name, n=v))
@@ -282,14 +361,7 @@ def build(
 
     # 6 rollback, newest change first: data, then altered tables, then new tables.
     head(t["s6"])
-    steps: list[tuple[str, list[str]]] = []
-    for d in reversed(data):
-        label = tx("rb_data", kind=t["d_" + str(d.get("kind"))], table=d.get("table"))
-        steps.append((label, [statement(d["rollback"])] if d.get("rollback") else []))
-    for x in reversed(alter_tables):
-        steps.append((tx("rb_alter", name=x.get("name")), [statement(x["rollback"])] if x.get("rollback") else []))
-    for x in reversed(new_tables):
-        steps.append((tx("rb_drop", name=x.get("name")), ["DROP TABLE IF EXISTS %s;" % x.get("name")]))
+    steps = rollback_steps(analysis, db, t)
     if not steps:
         comment(t["none"])
     else:
