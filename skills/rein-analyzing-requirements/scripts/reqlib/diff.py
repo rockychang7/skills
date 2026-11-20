@@ -1,5 +1,7 @@
 """Compare two versions of an analysis item by item, for change marks on pages.
 
+`compare` is for the brief; `compare_backend` is the same for the backend plan.
+
 Items with IDs (features, questions, flows and their steps) are matched by ID.
 Lists without IDs (rules, examples, terms, …) are matched by content: equal
 items are unchanged, similar ones in the same place count as modified (old
@@ -144,18 +146,128 @@ def compare(old: dict[str, Any], new: dict[str, Any]) -> dict[str, Any]:
     for part in PLAIN_LISTS:
         note(part, list_diff(old.get(part), new.get(part)))
 
-    old_notes = {_dump(c) for c in old.get("changes") or []}
-    new_changes = 0
-    for c in new.get("changes") or []:
-        if _dump(c) in old_notes:
-            break
-        new_changes += 1
-
     return {
         "items": items,
         "lists": lists,
         "removed_steps": removed_steps,
         "total": sum(count.values()),
         **count,
-        "new_changes": new_changes,
+        "new_changes": len(new_notes(old, new)),
+    }
+
+
+def new_notes(old: dict[str, Any], new: dict[str, Any]) -> list[dict[str, Any]]:
+    """Change notes added since `old`: the log is newest first and append-only."""
+    seen = {_dump(c) for c in old.get("changes") or []}
+    out = []
+    for c in new.get("changes") or []:
+        if _dump(c) in seen:
+            break
+        out.append(c)
+    return out
+
+
+API_FIELDS = ("name", "kind", "internal", "side", "path", "does", "now", "where", "depends")
+
+
+def backend_keys(analysis: dict[str, Any]) -> set[str]:
+    """Every ID, table name and config key the backend part has, for picking change notes."""
+    be = analysis.get("backend") or {}
+    return ({x.get("id") for x in be.get("apis") or []} | {x.get("name") for x in be.get("tables") or []}
+            | {x.get("key") for x in be.get("configs") or []} | {x.get("table") for x in be.get("data") or []}) - {None}
+
+
+def backend_notes(analysis: dict[str, Any], notes: list[dict[str, Any]] | None = None) -> list[dict[str, Any]]:
+    """The change notes (all, or `notes`) that touch the backend part."""
+    keys = backend_keys(analysis)
+    return [c for c in (analysis.get("changes") or [] if notes is None else notes)
+            if keys & set(c.get("refs") or [])]
+
+
+def compare_backend(old: dict[str, Any], new: dict[str, Any]) -> dict[str, Any]:
+    """Change marks for the backend plan, in the shape `compare` returns.
+
+    Owner and status are progress, not requirement changes: they never count.
+    `old` holds an item's previous one-line texts ("api:C2": {"does": …}), so
+    the page can show what it was.
+    """
+    items: dict[str, str] = {}
+    lists: dict[str, list[dict[str, Any]]] = {}
+    olds: dict[str, dict[str, Any]] = {}
+    count = {"add": 0, "modify": 0, "remove": 0}
+    ob, nb = old.get("backend") or {}, new.get("backend") or {}
+
+    def hit(key: str, s: str) -> None:
+        items[key] = s
+        count[s] += 1
+
+    def note(key: str, entries: list[dict[str, Any]], counted: bool = True) -> bool:
+        changed = [e for e in entries if e["s"] != "same"]
+        if changed:
+            lists[key] = entries
+            if counted:
+                for e in changed:
+                    count[e["s"]] += 1
+        return bool(changed)
+
+    def removed_now(x: dict[str, Any], before: dict[str, Any]) -> bool:
+        return bool(x.get("removed")) and not before.get("removed")
+
+    old_apis = _by_id(ob.get("apis"))
+    for x in nb.get("apis") or []:
+        before, key = old_apis.get(x.get("id")), "api:%s" % x.get("id")
+        if before is None:
+            hit(key, "add")
+        elif removed_now(x, before):
+            hit(key, "remove")
+        elif not x.get("removed"):
+            changed = False
+            if any(_dump(before.get(f)) != _dump(x.get(f)) for f in API_FIELDS):
+                count["modify"] += 1
+                changed = True
+                was = {f: before[f] for f in ("does", "where", "now") if before.get(f) and before.get(f) != x.get(f)}
+                if was:
+                    olds[key] = was
+            for part in ("todo", "online"):
+                changed = note("%s:%s" % (key, part), list_diff(before.get(part), x.get(part))) or changed
+            if changed:
+                items[key] = "modify"
+
+    old_tables = _by_id(ob.get("tables"), "name")
+    for x in nb.get("tables") or []:
+        before, key = old_tables.get(x.get("name")), "table:%s" % x.get("name")
+        if before is None:
+            hit(key, "add")
+        elif removed_now(x, before):
+            hit(key, "remove")
+        elif not x.get("removed") and _dump(before) != _dump(x):
+            hit(key, "modify")
+            # New patches are shown on the table, not counted on their own.
+            note(key + ":patches", list_diff(before.get("patches"), x.get("patches")), counted=False)
+
+    old_configs = _by_id(ob.get("configs"), "key")
+    for x in nb.get("configs") or []:
+        before, key = old_configs.get(x.get("key")), "config:%s" % x.get("key")
+        if before is None:
+            hit(key, "add")
+        elif removed_now(x, before):
+            hit(key, "remove")
+        elif not x.get("removed") and _dump(before) != _dump(x):
+            hit(key, "modify")
+
+    # Data changes have no ID: one that is not in the old version word for word is new.
+    old_data = {_dump(d) for d in ob.get("data") or []}
+    for i, d in enumerate(nb.get("data") or []):
+        if _dump(d) not in old_data:
+            hit("data:%d" % i, "add")
+
+    note("risks", list_diff(ob.get("risks"), nb.get("risks")))
+
+    return {
+        "items": items,
+        "lists": lists,
+        "old": olds,
+        "total": sum(count.values()),
+        **count,
+        "new_changes": len(backend_notes(new, new_notes(old, new))),
     }

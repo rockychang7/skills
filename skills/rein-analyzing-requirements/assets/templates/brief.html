@@ -94,7 +94,7 @@ button { font: inherit; color: inherit; }
 
 /* ---------- frame ---------- */
 .app { display: grid; grid-template-columns: 260px minmax(0, 1fr); min-height: 100vh; }
-.rail { position: sticky; top: 0; height: 100vh; overflow-y: auto; background: var(--ground); border-right: 1px solid var(--rule); padding: 26px 18px 28px 26px; }
+.rail { position: sticky; top: 0; height: 100vh; overflow-y: auto; background: var(--ground); border-right: 1px solid var(--rule); padding: 22px 18px 28px 26px; }
 .main { min-width: 0; }
 .wrap { max-width: 880px; margin: 0 auto; padding-left: max(40px, env(safe-area-inset-left, 0px)); padding-right: max(40px, env(safe-area-inset-right, 0px)); }
 @media (max-width: 1080px) {
@@ -106,6 +106,13 @@ button { font: inherit; color: inherit; }
 }
 
 /* ---------- rail ---------- */
+.files { display: grid; gap: 1px; padding-bottom: 16px; margin-bottom: 18px; border-bottom: 1px solid var(--rule); }
+.files-h { font-size: 11.5px; color: var(--ink-3); letter-spacing: .08em; margin-bottom: 4px; }
+.files > a, .files > span { display: grid; grid-template-columns: 18px minmax(0, 1fr); gap: 6px; padding: 4px 10px; margin-left: -10px; border-radius: 8px; font-size: 13.5px; color: var(--ink-2); }
+.files a:hover { background: var(--rule-2); text-decoration: none; }
+.files .on { background: var(--page); color: var(--ink); font-weight: 600; box-shadow: var(--lift); }
+.files .no { color: var(--ink-3); opacity: .7; }
+.files i { font-style: normal; font-family: var(--mono); font-size: 12px; color: var(--ink-3); }
 .rail-kind { font-size: 12px; color: var(--ink-3); letter-spacing: .1em; }
 .rail-title { font-size: 16px; font-weight: 700; line-height: 1.4; margin-top: 2px; }
 .rail-id { font-size: 11.5px; color: var(--ink-3); margin-top: 2px; overflow-wrap: anywhere; }
@@ -239,7 +246,7 @@ body.only-changes [data-delta="0"] { opacity: .4; }
 .legend .lg-step { width: 18px; height: 12px; border: 1px solid var(--rule); border-radius: 4px; background: var(--page); }
 .legend .lg-dec { width: 9px; height: 9px; border: 1.5px solid var(--ink-3); transform: rotate(45deg); margin: 0 3px; }
 .legend .lg-end { width: 20px; height: 12px; border: 1px dashed var(--ink-3); border-radius: 999px; }
-.flows { display: grid; gap: 30px; }
+.flows { display: grid; grid-template-columns: minmax(0, 1fr); gap: 30px; }
 .flow-h { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; margin-bottom: 10px; }
 .flow-h h3 { font-size: 16px; display: inline-flex; align-items: baseline; gap: 8px; }
 .flow-h p { font-size: 13.5px; color: var(--ink-3); }
@@ -561,7 +568,13 @@ tr.ln.is-chg::before { display: none; }
     var subs = live.map(function (f) {
       return '<a href="#f-' + h(f.id) + '" data-client="' + h(f.side) + '"><span><span class="id">' + h(f.id) + "</span>" + h(f.name) + "</span>" + mark(state("feature:" + f.id)) + "</a>";
     }).join("");
-    return '<div class="rail-kind">' + h(t("doc_kind")) + '</div><div class="rail-title">' + h(A.meta.title) + '</div><div class="rail-id mono">' + h(M.id) + "</div>" +
+    // The requirement's other pages; one that is not generated yet shows without a link.
+    var files = arr(D.pages).length > 1 ? '<div class="files"><div class="files-h">' + h(t("files_h")) + "</div>" + arr(D.pages).map(function (p, i) {
+      var inner = "<i>" + (i + 1) + "</i><span>" + h(p.label) + "</span>";
+      if (p.current) return '<span class="on">' + inner + "</span>";
+      return p.file ? '<a href="' + h(p.file) + '">' + inner + "</a>" : '<span class="no" title="' + h(t("file_none")) + '">' + inner + "</span>";
+    }).join("") + "</div>" : "";
+    return files + '<div class="rail-kind">' + h(t("doc_kind")) + '</div><div class="rail-title">' + h(A.meta.title) + '</div><div class="rail-id mono">' + h(M.id) + "</div>" +
       '<nav class="toc" aria-label="' + h(t("toc")) + '">' + NAV.filter(function (s) { return document.getElementById(s[0]); }).map(function (s) {
         var hot = s[0] === "questions" && openP0.length;
         var a = '<a href="#' + s[0] + '" data-nav="' + s[0] + '"><span>' + h(s[1]) + "</span>" + (s[2] != null ? '<span class="n' + (hot ? " hot" : "") + '">' + h(s[2]) + "</span>" : "") + "</a>";

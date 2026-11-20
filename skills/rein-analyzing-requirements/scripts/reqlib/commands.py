@@ -263,12 +263,21 @@ def cmd_render(args: argparse.Namespace) -> int:
     if args.frontend and "frontend" not in wanted:
         wanted.append("frontend")
     texts = render.load_texts(state["lang"])
-    files, not_yet = [], []
-    for page in wanted:
-        if page not in render.READY:
-            not_yet.append(page)
-            continue
-        content = render.brief_html(analysis, state, entry["v"], generated, doc_text, texts, base, base_analysis)
+    making = [p for p in wanted if p in render.READY]
+    not_yet = [p for p in wanted if p not in render.READY]
+    # Each page lists the requirement's pages: the ones it needs, plus any generated earlier.
+    exists = {p for p in render.PAGES if (folder / "out" / texts["files"][p]).is_file()}
+    needed = render.pages_needed(analysis, args.frontend)
+    shown = [p for p in render.PAGES if p in needed or p in wanted or p in exists]
+    linked = exists | set(making)
+    files = []
+    for page in making:
+        pages = render.page_list(texts, shown, linked, page)
+        if page == "brief":
+            content = render.brief_html(analysis, state, entry["v"], generated, doc_text, texts, base, base_analysis,
+                                        pages)
+        else:
+            content = render.plan_html(analysis, state, entry["v"], generated, texts, base, base_analysis, pages)
         result, page_issues = render.write_page(folder, texts["files"][page], content, state, entry["v"], args.force)
         files.append(dict(result, page=page))
         issues += page_issues
