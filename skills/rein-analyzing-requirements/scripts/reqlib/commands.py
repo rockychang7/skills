@@ -9,6 +9,7 @@ from pathlib import Path
 
 from . import diff as diffs
 from . import example as ex
+from . import notice
 from . import openapi
 from . import render
 from . import sends
@@ -459,12 +460,13 @@ def cmd_send(args: argparse.Namespace) -> int:
     common = dict(id=state["id"], to=args.to, no=no, version=entry["v"])
     if any(i["level"] in BLOCKING for i in issues):
         return finish("send", issues, limit=None if args.all else ISSUE_LIMIT, sent=False, files=view, **common)
+    text = _notice(job, args.to, no, at, files, names, bases)
     if args.preview:
         note("Preview only: nothing was recorded or written.")
-        return finish("send", issues, sent=False, preview=True, files=view, **common)
+        return finish("send", issues, sent=False, preview=True, files=view, notice=text, **common)
 
     # Write the copies that are sent, record the send, then bring the working copies in line.
-    record = {"no": no, "to": args.to, "files": files, "v": entry["v"], "at": at, "copies": []}
+    record = {"no": no, "to": args.to, "files": files, "v": entry["v"], "at": at, "copies": [], "notice": text}
     belongs = {"no": no, "date": sends.short_date(at)}
     rail = {p: names[p][0] for p in files}
     for item in view:
@@ -480,10 +482,35 @@ def cmd_send(args: argparse.Namespace) -> int:
     save_state(folder, state)
     for item in view:
         item["files"] = [str(folder / "sent" / n) for n in item["files"]]
-    return finish("send", issues, sent=True, files=view, working=working, **common, next=[
-        "Hand the files over with the tools this session has (a chat or file-sharing skill), after the user says "
-        "where and to whom; with no such tool, give the user the file paths.",
+    return finish("send", issues, sent=True, files=view, working=working, notice=text, **common, next=[
+        "Give the user the notice as it is, ready to paste. Hand the files and the notice over with the tools this "
+        "session has (a chat or file-sharing skill) only after the user says where and to whom; with no such tool, "
+        "give the user the file paths.",
     ])
+
+
+def _notice(job: render.Job, to: str, no: int, at: str, files: list, names: dict, bases: dict) -> str:
+    """The notice for the team chat, from the change notes since these readers' copies."""
+    analysis, frontend = job.analysis, job.frontend
+    got = [b for b in bases.values() if b is not None]
+    oldest = min(got, key=lambda s: (s["v"], s["no"])) if got else None
+    notes: list = []
+    breaking: dict = {}
+    keys = set().union(*(notice.page_keys(p, analysis, frontend) for p in files))
+    if oldest is not None:
+        base_analysis = job.base_drafts(oldest["v"])[0]
+        frontend_notes: list = []
+        if bases.get("frontend") is not None:
+            v = bases["frontend"]["v"]
+            frontend_notes = diffs.new_notes(job.base_drafts(v)[1] or {}, frontend or {})
+            breaking = {api: lines["breaking"] for api, lines in job.frontend_diff(v)["apis"].items() if lines["breaking"]}
+        notes = notice.pick(diffs.new_notes(base_analysis, analysis), frontend_notes, keys,
+                            notice.page_keys("frontend", analysis, frontend))
+    return notice.build(
+        job.texts["send"], title=(analysis.get("meta") or {}).get("title", ""), to=to, no=no, at=at,
+        files=[n for p in files for n in names[p]], first_files=[n for p in files if bases[p] is None for n in names[p]],
+        base=oldest, notes=notes, breaking=breaking, analysis=analysis, open_questions=render.open_questions(analysis),
+        keys=keys)
 
 
 CITED_LIMIT = 15  # citations listed per changed section

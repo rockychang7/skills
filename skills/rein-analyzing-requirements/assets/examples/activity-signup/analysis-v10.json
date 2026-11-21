@@ -575,7 +575,7 @@
   "changes": [
     { "type": "add", "text": "R4 上线前先发 message-service：新加了「候补补位成功」通知模板", "refs": ["R4"] },
     { "type": "add", "text": "C06 候补报名：名额满了可以排候补，有人取消按顺序补上（§3.6 新增）；自动补位要等 Q06 定", "refs": ["C06", "C5", "N2", "Q06", "C02", "C03", "C3", "C4", "B2", "P1", "P2"], "src": "§3.6" },
-    { "type": "modify", "text": "activity_signup 加了取消时间；状态多了「候补中」", "refs": ["activity_signup", "C4"] },
+    { "type": "modify", "text": "C4 取消报名：报名记录会存下取消时间；报名状态多了「候补中」", "refs": ["activity_signup", "C4"] },
     { "type": "modify", "text": "C1 活动详情：名额换成新字段名 max_quota，和剩余名额分清；老字段 quota 保留到 11-25", "refs": ["C1", "B1", "activity"] },
     { "type": "modify", "text": "C2 报名：返回多了剩余名额，前端报名后不用再查一次", "refs": ["C2"] },
     { "type": "modify", "text": "C04 取消报名：报名截止以后也能取消，只看离开始是否超过 24 小时（Q01 定了，原文 §3.4 已改）", "refs": ["Q01", "C04", "C4", "P2"], "src": "§3.4" },

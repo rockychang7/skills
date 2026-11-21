@@ -322,7 +322,7 @@ entry, so a send shows every note since that reader's last copy.
 | Field | Required | What |
 | --- | --- | --- |
 | `type` | yes | `add`, `modify` or `remove` |
-| `text` | yes | One change per line, in plain words; start with the ID it is about |
+| `text` | yes | One change per line, in words the readers of the changed pages use; start with the feature or API ID it is about. Table and column names go in `refs`, not here: the team notice copies this text as it is. Field names the frontend reads may stay |
 | `refs[]` | yes | Every ID, table name or config key the change touches. `send` checks that each difference it finds is covered by some entry's `refs` |
 | `src` | no | Document section, when the document caused it |
 

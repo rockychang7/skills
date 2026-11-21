@@ -115,8 +115,8 @@ from the project directory so that it finds the project settings.
   document changes and what that affects (`references/changes.md`), and wait
   for a go-ahead before changing the analysis.
 - **Before `send`.** Once `send --preview` passes, tell the user who gets
-  which files and what each compares with, and wait for a yes. Post or upload
-  nothing without being told where.
+  which files and what each compares with, show the team notice it drafted,
+  and wait for a yes. Post or upload nothing without being told where.
 - **`render` reports `render.kept-manual`.** Someone edited the page by hand.
   Ask whether those edits matter: copy what matters into `analysis.json` and
   render again, or render with `--force` to replace the page.

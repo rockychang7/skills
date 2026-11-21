@@ -12,8 +12,10 @@ after the user agreed to what it does to the analysis.
 
 Readers care about one thing: what changed since the copy they have. `send`
 records who got which copy, and every later copy marks the changes since
-then. Change notes (`changes`) are how they read those changes, so write one
-with every change, in plain words, starting with the ID, with `refs` naming
+then. Change notes (`changes`) are how they read those changes, on the pages
+and in the team notice, word for word. So write one with every change: in
+words the readers of the changed pages use, starting with the feature or API
+ID, no table or column names (those go in `refs`), with `refs` naming
 everything it touches. Owners and status are progress and need none.
 
 ## The document changed
@@ -110,13 +112,21 @@ team named: ask which.
    | `source.behind` (warn) | A newer document is not taken in yet: tell the user before sending |
    | anything from `check` | Fix it as `check` says |
 
-2. **Ask.** Tell the user who gets which files, what each one compares with
-   (`compared_with`: send N and its date, or first time), and the open P0
-   questions. Wait for a yes.
+2. **Ask.** Tell the user who gets which files and what each one compares
+   with (`compared_with`: send N and its date, or first time), and show the
+   `notice` as it is: the text for the team chat. Wait for a yes.
 3. **Send.** The same command without `--preview`. It saves the copies in
-   `sent/` (names carry the send number and date), records the send, and
-   updates the pages in `out/` to match.
-4. **Hand them over.** The script posts nothing. With a tool that can (a chat
-   or file-sharing skill), send only after the user says where and to whom;
+   `sent/` (names carry the send number and date), records the send with its
+   notice, and updates the pages in `out/` to match.
+4. **Hand them over.** The script posts nothing. Give the user the notice,
+   ready to paste. With a tool that can post or share files (a chat or
+   file-sharing skill), use it only after the user says where and to whom;
    otherwise give the user the file paths.
+
+The notice is put together from the change notes, word for word: the ones
+touching these pages, grouped into added, changed and removed, with API
+changes that break the frontend first (found by comparing the stored API
+descriptions); then what open P0 questions hold back on these pages. A line
+that reads badly is fixed in its change note (then `render`, preview again),
+never in the notice: the pages show the same notes.
 

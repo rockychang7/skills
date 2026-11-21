@@ -408,11 +408,16 @@ class Job:
         spec = self.load_contract(at["contract_v"]) if at.get("contract_v") else None
         return self.load_version(v), frontend, spec
 
-    def frontend_marks(self, v: int) -> dict[str, str]:
-        """Change marks of the frontend guide against version `v`: {"api:C1": "modify", …}."""
+    def frontend_diff(self, v: int) -> dict[str, Any]:
+        """The frontend guide against version `v`: {"items": {"api:C1": "modify", …},
+        "apis": {"C1": {"breaking": [lines], "compatible": [lines]}, …}, "total": n}."""
         base_analysis, base_frontend, base_spec = self.base_drafts(v)
         return _frontend_clients(self.analysis, self.frontend or {}, self.spec, self.texts["frontend"],
-                                 base_analysis, base_frontend, base_spec)[1]["items"]
+                                 base_analysis, base_frontend, base_spec)[1]
+
+    def frontend_marks(self, v: int) -> dict[str, str]:
+        """Change marks of the frontend guide against version `v`: {"api:C1": "modify", …}."""
+        return self.frontend_diff(v)["items"]
 
     def contents(self, page: str, base: dict[str, Any] | None = None, send: dict[str, Any] | None = None,
                  pages: list[dict[str, Any]] | None = None) -> list[tuple[str, str, dict[str, Any]]]:
