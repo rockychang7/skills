@@ -9,6 +9,8 @@ from pathlib import Path
 
 from . import diff as diffs
 from . import example as ex
+from . import xmind
+from . import __version__, SKILL_NAME
 from . import notice
 from . import openapi
 from . import render
@@ -720,6 +722,42 @@ def cmd_example(args: argparse.Namespace) -> int:
     return finish("example", kind="analysis", note=ex.NOTE, sample=ex.analysis_sample())
 
 
+def cmd_export(args: argparse.Namespace) -> int:
+    settings, folder, state = _requirement(args)
+    versions = state.get("versions") or []
+    if not versions:
+        raise Stop(issue("export.not-rendered", "error", "Nothing has been rendered yet.",
+                         hint="Run check and render first; the map is drawn from the rendered version.", where="--req"))
+    last = versions[-1]
+    load_version = _version_loader(folder, state)
+    analysis = load_version(last["v"])
+    if not [a for a in (analysis.get("backend") or {}).get("apis") or [] if not a.get("removed")]:
+        raise Stop(issue("export.no-apis", "error", "Version %d has no backend APIs, so there is no backend plan to "
+                         "draw." % last["v"], where="--req"))
+    issues = []
+    try:
+        current = read_json(folder / "analysis.json", "analysis")
+        if render.draft_fingerprint(current, _frontend(folder, False), _contract(folder, state)[1]) != last.get("sha256"):
+            issues.append(issue("export.not-rendered", "warn",
+                                "The drafts changed after version %d; the map shows version %d." % (last["v"], last["v"]),
+                                hint="If the change matters, run check and render first, then export again.",
+                                where="analysis.json"))
+    except JsonProblem:
+        pass
+    # Like the backend plan page: mark what changed since the copy of the plan last sent.
+    texts = render.load_texts(state["lang"])
+    prev = sends.last_send(state.get("sends") or [], "plan")
+    marks = diffs.compare_backend(load_version(prev["v"]), analysis)["items"] if prev and prev["v"] != last["v"] else {}
+    raw = xmind.pack(xmind.build(analysis, texts, marks), texts["xmind"]["sheet"], last["at"], SKILL_NAME, __version__)
+    name = texts["files"]["plan"].rsplit(".", 1)[0] + ".xmind"
+    result, found = render.write_page(folder, name, raw, state, last["v"], args.force, again="export xmind")
+    save_state(folder, state)
+    return finish("export", issues + found, id=state["id"], format="xmind", version=last["v"],
+                  compared_with=sends.base_meta(prev) if marks else None, **result,
+                  next=["Owners and status changed in XMind do not come back: set them on the backend plan page "
+                        "(\"copy plan\") or tell the agent, then render and export again."])
+
+
 HANDLERS = {
     "new": cmd_new,
     "config set": cmd_config_set,
@@ -729,6 +767,7 @@ HANDLERS = {
     "steps": cmd_steps,
     "contract": cmd_contract,
     "refresh": cmd_refresh,
+    "export": cmd_export,
     "send": cmd_send,
     "status": cmd_status,
     "example": cmd_example,

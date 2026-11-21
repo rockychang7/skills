@@ -21,7 +21,7 @@ from . import diff as diffs
 from . import openapi
 from . import sql
 from .doc import section_texts
-from .files import write_text
+from .files import write_bytes, write_text
 from .output import issue
 
 ASSETS = Path(__file__).resolve().parents[2] / "assets"
@@ -378,11 +378,13 @@ def release_html(
     return _fill("release", analysis, state["lang"], texts, data)
 
 
-def write_page(folder: Path, name: str, content: str, state: dict[str, Any], version: int,
-               force: bool) -> tuple[dict[str, Any], list[dict[str, str]]]:
-    """Write out/<name> unless someone edited the last generated copy by hand."""
+def write_page(folder: Path, name: str, content: str | bytes, state: dict[str, Any], version: int,
+               force: bool, again: str = "render") -> tuple[dict[str, Any], list[dict[str, str]]]:
+    """Write out/<name> (text, or bytes for an .xmind file) unless someone edited the last generated
+    copy by hand. `again` is the command the hint says to run with --force."""
     out = folder / "out" / name
-    raw = content.encode("utf-8")
+    raw = content.encode("utf-8") if isinstance(content, str) else content
+    write = write_text if isinstance(content, str) else write_bytes
     digest = file_hash(raw)
     outputs = state.setdefault("outputs", {})
     result: dict[str, Any] = {"file": str(out)}
@@ -394,7 +396,7 @@ def write_page(folder: Path, name: str, content: str, state: dict[str, Any], ver
         record = outputs.get(name)
         if not force and (record is None or current != record.get("sha256")):
             alt = out.with_name(out.stem + ".new" + out.suffix)
-            write_text(alt, content)
+            write(alt, content)
             result.update(status="kept-manual", new_file=str(alt))
             return result, [
                 issue(
@@ -402,11 +404,11 @@ def write_page(folder: Path, name: str, content: str, state: dict[str, Any], ver
                     "warn",
                     "%s was changed by hand since it was generated, so it was kept; the new page is %s." % (name, alt.name),
                     hint="Ask the user whether the hand edits matter. Copy what matters into analysis.json and "
-                    "render again, or run render --force to replace the file.",
+                    "run %s again, or run %s --force to replace the file." % (again, again),
                     where="out/" + name,
                 )
             ]
-    write_text(out, content)
+    write(out, content)
     outputs[name] = {"sha256": digest, "v": version}
     result["status"] = "written"
     return result, []

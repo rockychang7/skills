@@ -92,23 +92,6 @@ def _positive_int(text: str) -> int:
     return value
 
 
-def _not_implemented(command: str) -> Callable[[argparse.Namespace], int]:
-    def handler(args: argparse.Namespace) -> int:
-        return finish(
-            command,
-            [
-                issue(
-                    "cli.not-implemented",
-                    "error",
-                    "'%s' is not implemented yet." % command,
-                    hint="This build is a skeleton; only --help and --version work.",
-                )
-            ],
-        )
-
-    return handler
-
-
 def _add_command(
     subparsers: argparse._SubParsersAction,
     name: str,
@@ -127,7 +110,8 @@ def _add_command(
         allow_abbrev=False,
     )
     command = full_name or name
-    parser.set_defaults(handler=HANDLERS.get(command) or _not_implemented(command), command_name=command)
+    # A group such as `config` has none; its sub-command sets its own.
+    parser.set_defaults(handler=HANDLERS.get(command), command_name=command)
     return parser
 
 
@@ -371,12 +355,17 @@ def build_parser() -> argparse.ArgumentParser:
     p = _add_command(
         sub,
         "export",
-        "export the backend plan (XMind)",
-        "Export the backend plan as an XMind file, with owners on the nodes.",
+        "export the backend plan as an XMind mind map",
+        "Draw the backend plan of the last rendered version as an XMind mind map in\n"
+        "out/: one branch per client with its APIs (owner and status as labels,\n"
+        "progress as a marker, details folded), then tables and data, configs,\n"
+        "risks and what was dropped. Marks what changed since the plan was last\n"
+        "sent. Opens in XMind 2020 and later, and in XMind 8.",
         ["export xmind --req activity-signup"],
     )
     p.add_argument("format", choices=("xmind",), help="export format")
     _add_req_options(p)
+    p.add_argument("--force", action="store_true", help="replace the file even if it was edited by hand")
 
     p = _add_command(
         sub,

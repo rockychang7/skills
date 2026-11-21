@@ -38,6 +38,20 @@ def read_json(path: Path, code_prefix: str = "json") -> Any:
         )
 
 
+def write_bytes(path: Path, data: bytes) -> None:
+    """Write bytes, replacing the file in one step."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    fd, tmp = tempfile.mkstemp(dir=str(path.parent), prefix=".tmp-", suffix=path.suffix)
+    try:
+        with os.fdopen(fd, "wb") as f:
+            f.write(data)
+        os.replace(tmp, str(path))
+    except BaseException:
+        if os.path.exists(tmp):
+            os.remove(tmp)
+        raise
+
+
 def write_text(path: Path, text: str) -> None:
     """Write UTF-8 text with LF line endings, replacing the file in one step."""
     path.parent.mkdir(parents=True, exist_ok=True)

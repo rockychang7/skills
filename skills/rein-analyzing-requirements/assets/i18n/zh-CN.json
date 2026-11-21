@@ -13,6 +13,27 @@
     "release": "上线清单",
     "frontend": "前端接口对接"
   },
+  "xmind": {
+    "sheet": "后端安排",
+    "root": "{title} · 后端安排",
+    "api": "{id} {name}（{kind}）",
+    "colon": "：",
+    "does": "要做：",
+    "hold": "先别做：等 {q} 定：{title}",
+    "depends": "先要：{ids}",
+    "no_client": "不分端",
+    "tables_h": "表和数据",
+    "table_new": "新建表 {name}",
+    "table_alter": "改表 {name}",
+    "data": "改数据 {table}",
+    "configs_h": "配置",
+    "config_new": "新配置 {key}",
+    "config_modify": "改配置 {key}",
+    "gone_h": "这期不做了",
+    "gone": "{id} {name}：{why}",
+    "chg_add": "新增",
+    "chg_modify": "有改动"
+  },
   "send": {
     "file": "-第{n}次-{date}",
     "n_title": "【{title}】{reader} · 第 {n} 次发出（{date}）",

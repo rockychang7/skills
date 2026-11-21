@@ -13,6 +13,27 @@
     "release": "Release checklist",
     "frontend": "Frontend API guide"
   },
+  "xmind": {
+    "sheet": "Backend plan",
+    "root": "{title} · backend plan",
+    "api": "{id} {name} ({kind})",
+    "colon": ": ",
+    "does": "To do: ",
+    "hold": "Hold off: until {q} is decided: {title}",
+    "depends": "Needs first: {ids}",
+    "no_client": "No client",
+    "tables_h": "Tables and data",
+    "table_new": "New table {name}",
+    "table_alter": "Change table {name}",
+    "data": "Change data in {table}",
+    "configs_h": "Configs",
+    "config_new": "New config {key}",
+    "config_modify": "Change config {key}",
+    "gone_h": "Dropped this time",
+    "gone": "{id} {name}: {why}",
+    "chg_add": "New",
+    "chg_modify": "Changed"
+  },
   "send": {
     "file": "-send{n}-{date}",
     "n_title": "[{title}] {reader} · send {n} ({date})",
