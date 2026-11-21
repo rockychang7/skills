@@ -50,6 +50,15 @@ written `"§3.4, §3.6"`. Section IDs come from the document's headings and are
 listed by `new` and `refresh`: numbered headings keep their numbers, the rest
 are numbered in order.
 
+A document made of several parts that each number from 1 (PC, APP, mini
+program) gets the part's name in front: `"src": "§APP-2.1"`; the part itself
+is `§APP`. Use the IDs exactly as `new` lists them; never renumber the
+stored document yourself.
+
+A section or part in `skipped_sections` takes everything under it along: an
+old version pasted at the end is one entry. Citing a section covers only
+that section, never its subsections.
+
 Never copy document text into the analysis. Pages show the cited section from
 the stored document. The only exception is a question's `quotes`.
 

@@ -539,7 +539,9 @@ tr.ln.is-chg::before { display: none; }
   }
   function srcChips(src) {
     if (!src) return "";
-    return (String(src).match(/\d+(?:\.\d+)*/g) || []).map(function (id) {
+    var ids = [], re = /§\s*([A-Za-z][A-Za-z0-9]*(?:-\d+(?:\.\d+)*)?|\d+(?:\.\d+)*)/g, m;
+    while ((m = re.exec(String(src)))) ids.push(m[1]);
+    return ids.map(function (id) {
       return '<button type="button" class="src" data-sec="' + h(id) + '">§' + h(id) + "</button>";
     }).join("");
   }

@@ -19,7 +19,7 @@ import re
 import unicodedata
 from typing import Any, Iterator
 
-from .doc import split_sections
+from .doc import section_refs, split_sections, under
 from .output import issue
 
 # Field notation: "str", "int", "bool", "strs" (list of strings), "map" (object
@@ -117,7 +117,6 @@ NO_CLIENT = "s"
 QUESTION_ID = re.compile(r"^Q\d{2}$")
 RELEASE_ID = re.compile(r"^R\d+$")
 GUIDE_ID = re.compile(r"^G\d+$")
-SECTION_REF = re.compile(r"§\s*(\d+(?:\.\d+)*)")
 WHERE_CLAUSE = re.compile(r"\bwhere\b", re.IGNORECASE)
 # Technical words that should not reach the brief, which product, frontend
 # and backend all read: routes ("POST /order/review", "/order/list") and
@@ -257,10 +256,6 @@ def _walk_srcs(node: Any, where: str, removed: bool = False) -> Iterator[tuple[s
     elif isinstance(node, list):
         for i, item in enumerate(node):
             yield from _walk_srcs(item, "%s[%s]" % (where, _label(item, i)), removed)
-
-
-def section_refs(src: str) -> list[str]:
-    return SECTION_REF.findall(src)
 
 
 # ------------------------------------------------------------ analysis
@@ -436,7 +431,7 @@ def check_analysis(a: Any, doc_text: str, envs: list[str], lang: str = "zh-CN") 
         refs = section_refs(src)
         if not refs:
             out.add("src.bad", "error", where, "src %r names no section." % src,
-                    hint="Write sections as listed by new/refresh, e.g. \"§3.4\" or \"§3.4, §3.6\".")
+                    hint="Write sections as listed by new/refresh, e.g. \"§3.4\", \"§3.4, §3.6\" or \"§APP-2.1\".")
         for ref in refs:
             if ref not in sections and not removed:
                 out.add("src.unknown-section", "error", where, "§%s is not a section of the latest document." % ref,
@@ -450,25 +445,24 @@ def check_analysis(a: Any, doc_text: str, envs: list[str], lang: str = "zh-CN") 
     return _apply_confirmations(out.items, _dicts(a.get("confirmations")))
 
 
-def _under(ref: str, section_id: str) -> bool:
-    """Whether a section is `ref` itself or one of its subsections."""
-    return section_id == ref or section_id.startswith(ref + ".")
-
-
 def _check_coverage(a: dict[str, Any], parts: list[Any], out: Issues) -> None:
     """Every document section is cited by a live item, or listed in skipped_sections.
 
     A section counts as cited when it or one of its subsections is: a heading
-    whose subsections are all used has nothing of its own left. `changes`
-    entries record history and do not count.
+    whose subsections are all used has nothing of its own left. A skipped
+    section takes everything under it along (a background chapter, an old
+    version pasted at the end: one entry). Citing a section never covers its
+    subsections, so one broad citation cannot stand in for a whole part.
+    `changes` entries record history and do not count.
     """
     cited: set[str] = set()
+    skipped: set[str] = set()
     for where, src, removed in _walk_srcs(a, ""):
         if not removed and not where.startswith("changes"):
-            cited.update(section_refs(src))
+            (skipped if where.startswith("skipped_sections") else cited).update(section_refs(src))
     for p in parts:
         sid = p.section.id
-        if not any(_under(sid, c) for c in cited):
+        if not any(under(sid, c) for c in cited | skipped) and not any(under(s, sid) for s in skipped):
             out.add("coverage.section", "error", "§" + sid,
                     "§%s %s is not cited by anything and not in skipped_sections." % (sid, p.section.title),
                     hint="Cite it from the rule, step or question it gives rise to; if it has nothing to build "
@@ -521,7 +515,7 @@ def _check_quotes(questions: list[dict[str, Any]], parts: list[Any], out: Issues
         for i, quote in enumerate(_dicts(q.get("quotes"))):
             refs = section_refs(_text(quote, "src"))
             body = _plain("\n".join(
-                "\n".join([p.heading] + p.body) for p in parts if any(_under(r, p.section.id) for r in refs)))
+                "\n".join([p.heading] + p.body) for p in parts if any(under(r, p.section.id) for r in refs)))
             if not body:
                 continue  # no such section: src.unknown-section says so
             pieces = [_plain(s) for s in QUOTE_GAP.split(_text(quote, "text"))]

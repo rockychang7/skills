@@ -13,14 +13,13 @@ from __future__ import annotations
 import hashlib
 import html
 import json
-import re
 from pathlib import Path
 from typing import Any
 
 from . import diff as diffs
 from . import openapi
 from . import sql
-from .doc import section_texts
+from .doc import SECTION_REF, section_texts
 from .files import write_bytes, write_text
 from .output import issue
 
@@ -28,7 +27,6 @@ ASSETS = Path(__file__).resolve().parents[2] / "assets"
 PAGES = ("brief", "plan", "sql", "release", "frontend")
 READY = ("brief", "plan", "sql", "release", "frontend")  # pages this version can generate
 SWITCH = ("brief", "plan", "release", "frontend")  # pages whose working copy can switch between comparisons
-SECTION_REF = re.compile(r"§\s*(\d+(?:\.\d+)*)")
 
 
 def load_texts(lang: str) -> dict[str, Any]:

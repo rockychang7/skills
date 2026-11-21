@@ -20,8 +20,7 @@ from __future__ import annotations
 import difflib
 from typing import Any, Iterator
 
-from .check import section_refs
-from .doc import NUMBERED, Part, split_sections
+from .doc import Part, number_of, section_refs, split_sections
 
 SIMILAR = 0.6  # text similarity above which two leftover sections count as one that changed
 TEXT_LIMIT = 80
@@ -33,8 +32,8 @@ TEXT_KEYS = ("text", "name", "title", "rule", "when", "does", "why")
 
 def _name(p: Part) -> str:
     """The heading without its number: what stays the same when a section moves."""
-    m = NUMBERED.match(p.heading)
-    return " ".join((m.group(2) if m else p.heading).split())
+    num = number_of(p.heading)
+    return " ".join((num[1] if num else p.heading).split())
 
 
 def _whole(p: Part) -> str:
