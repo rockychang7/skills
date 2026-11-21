@@ -4,7 +4,10 @@ Two passes:
 1. Shape: every object is compared with a field table (SPEC below):
    required fields, types, allowed values, unknown fields.
 2. Meaning: ID patterns, duplicates, references between items, section
-   numbers, and the few rules that depend on other fields.
+   numbers, and the few rules that depend on other fields; then coverage
+   (every document section is used), length (rules and quotes stay short),
+   consistency (quotes still in the document, nothing points to removed
+   items) and language.
 
 The second pass reads the data defensively: anything of the wrong shape was
 already reported by the first pass and is skipped here.
@@ -13,8 +16,10 @@ already reported by the first pass and is skipped here.
 from __future__ import annotations
 
 import re
+import unicodedata
 from typing import Any, Iterator
 
+from .doc import split_sections
 from .output import issue
 
 # Field notation: "str", "int", "bool", "strs" (list of strings), "map" (object
@@ -119,6 +124,19 @@ WHERE_CLAUSE = re.compile(r"\bwhere\b", re.IGNORECASE)
 # snake_case table names. Paths inside URLs do not count.
 ROUTE = re.compile(r"\b(?:GET|POST|PUT|PATCH|DELETE)\s+/\S*|(?<![\w.:/])/[A-Za-z][\w-]*(?:/[\w{}:-]+)+")
 ACCEPTANCE_COLON = re.compile(r"^.+?[：:]\s*.+$")
+# Length limits, counted in units: one Chinese character or one word or number
+# is one unit, so the limits fit both languages. Loose on purpose: the longest
+# seen in real analyses are rules of 48 units, 13 rules in one feature and
+# quotes of 45 units. Tighten once more real requirements have been through.
+RULE_UNITS = 80
+FEATURE_RULES = 20
+QUOTE_UNITS = 150
+CJK = re.compile(r"[㐀-鿿豈-﫿]")
+WORD = re.compile(r"[A-Za-z0-9]+(?:['._-][A-Za-z0-9]+)*")
+LATIN_WORD = re.compile(r"[A-Za-z]{2,}")
+# Dropped before a quote is looked up in its section: spaces and Markdown marks.
+QUOTE_NOISE = re.compile(r"[\s*_`~>#|]+")
+QUOTE_GAP = re.compile(r"…+|\.{3,}")
 TYPE_NAMES = {"str": "a string", "int": "a whole number", "bool": "true or false", "strs": "a list of strings",
               "map": "an object of plain values", "rows": "a list of rows (lists of strings)"}
 
@@ -248,12 +266,14 @@ def section_refs(src: str) -> list[str]:
 # ------------------------------------------------------------ analysis
 
 
-def check_analysis(a: Any, sections: set[str], envs: list[str]) -> list[dict[str, str]]:
-    """Check an analysis; `sections` are the section IDs of the latest document."""
+def check_analysis(a: Any, doc_text: str, envs: list[str], lang: str = "zh-CN") -> list[dict[str, str]]:
+    """Check an analysis against the latest document's text, the project's environments and the requirement's lang."""
     out = Issues()
     _shape(ANALYSIS_SPEC, a, "root", "", out)
     if not isinstance(a, dict):
         return out.items
+    parts = split_sections(doc_text)[1]
+    sections = {p.section.id for p in parts}
     if "format" in a and a["format"] != 1:
         out.add("format.version", "error", "format", "Format %r is not supported." % (a["format"],),
                 hint="This version of req.py reads format 1.")
@@ -422,7 +442,166 @@ def check_analysis(a: Any, sections: set[str], envs: list[str]) -> list[dict[str
                 out.add("src.unknown-section", "error", where, "§%s is not a section of the latest document." % ref,
                         hint="Use the section IDs listed by new/refresh.")
 
+    _check_coverage(a, parts, out)
+    _check_length(features, questions, out)
+    _check_quotes(questions, parts, out)
+    _check_removed_refs(a, out)
+    _check_lang(a, lang, out)
     return _apply_confirmations(out.items, _dicts(a.get("confirmations")))
+
+
+def _under(ref: str, section_id: str) -> bool:
+    """Whether a section is `ref` itself or one of its subsections."""
+    return section_id == ref or section_id.startswith(ref + ".")
+
+
+def _check_coverage(a: dict[str, Any], parts: list[Any], out: Issues) -> None:
+    """Every document section is cited by a live item, or listed in skipped_sections.
+
+    A section counts as cited when it or one of its subsections is: a heading
+    whose subsections are all used has nothing of its own left. `changes`
+    entries record history and do not count.
+    """
+    cited: set[str] = set()
+    for where, src, removed in _walk_srcs(a, ""):
+        if not removed and not where.startswith("changes"):
+            cited.update(section_refs(src))
+    for p in parts:
+        sid = p.section.id
+        if not any(_under(sid, c) for c in cited):
+            out.add("coverage.section", "error", "§" + sid,
+                    "§%s %s is not cited by anything and not in skipped_sections." % (sid, p.section.title),
+                    hint="Cite it from the rule, step or question it gives rise to; if it has nothing to build "
+                    "(background, goals), add it to skipped_sections with why.")
+
+
+def _units(text: str) -> int:
+    """Length in units: one Chinese character, word or number each."""
+    return len(CJK.findall(text)) + len(WORD.findall(text))
+
+
+def _check_length(features: list[dict[str, Any]], questions: list[dict[str, Any]], out: Issues) -> None:
+    for f in features:
+        if "removed" in f:
+            continue
+        where = "features[%s]" % _text(f, "id")
+        rules = _dicts(f.get("rules"))
+        if len(rules) > FEATURE_RULES:
+            out.add("length.rules", "warn", where + ".rules",
+                    "%d rules in one feature (more than %d)." % (len(rules), FEATURE_RULES),
+                    hint="Drop rules that only restate the document, or split the feature in two "
+                    "(the new part takes a new ID).")
+        for i, rule in enumerate(rules):
+            n = _units(_text(rule, "text"))
+            if n > RULE_UNITS:
+                out.add("length.rule", "warn", "%s.rules[%d]" % (where, i),
+                        "Rule is %d units long (limit %d; a Chinese character or a word is one unit)." % (n, RULE_UNITS),
+                        hint="One rule says one thing: split it, or leave the document's wording to src.")
+    for q in _open_questions(questions):
+        for i, quote in enumerate(_dicts(q.get("quotes"))):
+            n = _units(_text(quote, "text"))
+            if n > QUOTE_UNITS:
+                out.add("length.quote", "warn", "questions[%s].quotes[%d]" % (_text(q, "id"), i),
+                        "Quote is %d units long (limit %d)." % (n, QUOTE_UNITS),
+                        hint="Quote only the sentences that raise the question; mark a gap with ….")
+
+
+def _open_questions(questions: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Questions still in play. Applied and superseded ones are history: they may quote an older document."""
+    return [q for q in questions if q.get("status") in ("open", "decided")]
+
+
+def _plain(text: str) -> str:
+    return QUOTE_NOISE.sub("", unicodedata.normalize("NFKC", text))
+
+
+def _check_quotes(questions: list[dict[str, Any]], parts: list[Any], out: Issues) -> None:
+    """A quote of an open or decided question is still in the section it cites (and its subsections)."""
+    for q in _open_questions(questions):
+        for i, quote in enumerate(_dicts(q.get("quotes"))):
+            refs = section_refs(_text(quote, "src"))
+            body = _plain("\n".join(
+                "\n".join([p.heading] + p.body) for p in parts if any(_under(r, p.section.id) for r in refs)))
+            if not body:
+                continue  # no such section: src.unknown-section says so
+            pieces = [_plain(s) for s in QUOTE_GAP.split(_text(quote, "text"))]
+            if any(s and s not in body for s in pieces):
+                out.add("quote.not-in-doc", "warn", "questions[%s].quotes[%d]" % (_text(q, "id"), i),
+                        "The quote is not in %s of the latest document." % _text(quote, "src"),
+                        hint="Quotes are exact document text: copy it again from that section (mark a gap with …). "
+                        "If the document changed, check whether the question still stands.")
+
+
+def _check_removed_refs(a: dict[str, Any], out: Issues) -> None:
+    """Live items that point to removed features or APIs. `changes` may: it is history."""
+    backend = a.get("backend") if isinstance(a.get("backend"), dict) else {}
+    gone = {_text(x, "id") for x in _dicts(a.get("features")) + _dicts(backend.get("apis")) if "removed" in x}
+    gone.discard("")
+    if not gone:
+        return
+
+    def report(where: str, ids: list[str]) -> None:
+        hit = [i for i in ids if i in gone]
+        if hit:
+            out.add("ref.removed", "warn", where, "Points to removed: %s." % ", ".join(hit),
+                    hint="Point it to what replaced the removed item, or drop the reference.")
+
+    for fw in _dicts(a.get("flows")):
+        for step in _dicts(fw.get("steps")):
+            report("flows[%s].steps[%s].features" % (_text(fw, "id"), _text(step, "id")), _strs(step.get("features")))
+    for f in _dicts(a.get("features")):
+        if "removed" not in f:
+            report("features[%s].apis" % _text(f, "id"), _strs(f.get("apis")))
+    for x in _dicts(backend.get("apis")):
+        if "removed" not in x:
+            report("backend.apis[%s].depends" % _text(x, "id"), _strs(x.get("depends")))
+    for i, risk in enumerate(_dicts(backend.get("risks"))):
+        report("backend.risks[%d].apis" % i, _strs(risk.get("apis")))
+    for q in _open_questions(_dicts(a.get("questions"))):
+        report("questions[%s].affects" % _text(q, "id"), _strs(q.get("affects")))
+
+
+def _reader_texts(a: dict[str, Any]) -> Iterator[tuple[str, str]]:
+    """(where, text) for what people read on any page, beyond what the brief shows."""
+    yield from _brief_texts(a)
+    brief = a.get("brief") if isinstance(a.get("brief"), dict) else {}
+    for key in ("what", "value"):
+        yield "brief." + key, _text(brief, key)
+    for f in _dicts(a.get("features")):
+        yield "features[%s].name" % _text(f, "id"), _text(f, "name")
+    for q in _dicts(a.get("questions")):
+        where = "questions[%s]" % _text(q, "id")
+        yield where + ".why", _text(q, "why")
+        for o in _dicts(q.get("options")):
+            yield "%s.options[%s].text" % (where, _text(o, "key")), _text(o, "text")
+    backend = a.get("backend") if isinstance(a.get("backend"), dict) else {}
+    for x in _dicts(backend.get("apis")):
+        where = "backend.apis[%s]" % _text(x, "id")
+        for key in ("name", "does", "now"):
+            yield "%s.%s" % (where, key), _text(x, key)
+        for key in ("todo", "online"):
+            for i, line in enumerate(_strs(x.get(key))):
+                yield "%s.%s[%d]" % (where, key, i), line
+
+
+def _check_lang(a: dict[str, Any], lang: str, out: Issues) -> None:
+    """One warning when text people read is in the other language.
+
+    zh-CN: a text with no Chinese and at least four English words. en: a text
+    with more Chinese characters than English words. Code names mixed into a
+    sentence pass either way.
+    """
+    off = []
+    for where, text in _reader_texts(a):
+        cjk, words = len(CJK.findall(text)), len(LATIN_WORD.findall(text))
+        if (cjk == 0 and words >= 4) if lang == "zh-CN" else (cjk > words):
+            off.append(where)
+    if off:
+        out.add("lang.mismatch", "warn", off[0],
+                "%d text(s) people read are not in %s: %s%s." % (
+                    len(off), lang, ", ".join(off[:5]), ", …" if len(off) > 5 else ""),
+                hint="Write names, summaries, rules, questions and backend notes in the requirement's lang (%s); "
+                "code names, routes and table names stay as they are." % lang)
 
 
 def _brief_texts(a: dict[str, Any]) -> Iterator[tuple[str, str]]:

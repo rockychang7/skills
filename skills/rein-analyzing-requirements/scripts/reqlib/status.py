@@ -95,7 +95,7 @@ def report(
     state: dict[str, Any],
     analysis: dict[str, Any] | None,
     envs: list[str],
-    sections: set[str],
+    doc_text: str,
     load_version: Callable[[int], dict[str, Any]],
     frontend: Any = None,
     contract_v: int | None = None,
@@ -187,7 +187,7 @@ def report(
     issues += unsent
 
     found = [i for i in source_issues or [] if i["level"] != "warn"]  # being behind is reported above
-    found += check_analysis(analysis, sections, envs) + sql.problems(analysis, state, load_version)
+    found += check_analysis(analysis, doc_text, envs, state["lang"]) + sql.problems(analysis, state, load_version)
     counts = summarize(found)
     fields["check"] = counts
     if counts.get("error") or counts.get("confirm"):

@@ -61,7 +61,8 @@ The product owner sends a new version: a file, a link, or pasted text.
    mistake, or the team may push back on part of it.
 5. **Update the analysis**, after the go-ahead:
    - A rule, step or question citing a changed section: make it match the new
-     text.
+     text. `check` points at open questions whose quotes are gone
+     (`quote.not-in-doc`).
    - A removed section: items that only it supports get `removed` with the
      reason ("§2.3 removed in document version 2"); never delete them. Items
      that also cite other sections lose only that citation.
@@ -69,6 +70,7 @@ The product owner sends a new version: a file, a link, or pasted text.
      one and that `src` points at another section without any error.
    - An added section: write it in like a new requirement (features, rules,
      flows, APIs, questions), or list it in `skipped_sections` with why.
+     `check` lists the sections nothing cites (`coverage.section`).
    - What the new text leaves unclear or contradicts: a new question. Never
      decide it yourself.
    - A question the new text answers: record the answer with `by` the

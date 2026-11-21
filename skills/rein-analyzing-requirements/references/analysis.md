@@ -40,6 +40,8 @@ item using them. So:
 2. To delete, keep the item and add `"removed": "<why>"`. Never renumber.
 3. To split, the main part keeps the ID and the new part takes a new one.
 4. To merge, keep one; the other gets `"removed": "merged into C02"`.
+5. Point live items (flow steps, features, APIs, open questions) at what
+   replaced a removed item; `check` warns about any still pointing at it.
 
 ### src: where in the document
 
@@ -53,11 +55,16 @@ the stored document. The only exception is a question's `quotes`.
 
 Items with `removed` may cite sections that no longer exist.
 
+Every section is cited by a live item, itself or through a subsection, or
+listed in `skipped_sections`; `check` reports the rest (`coverage.section`).
+`changes` entries and removed items do not count.
+
 ### Language
 
 Everything a person reads (names, summaries, rules, questions, notes) is
 written in the requirement's language, the `lang` printed by `new` (default
 `zh-CN`). Code names, table names, paths and config keys stay as they are.
+`check` warns (`lang.mismatch`) when such text is in the other language.
 
 ### Optional fields
 
@@ -187,6 +194,10 @@ Only write a `prd` rule when it changes how code is written or accepted.
 improves engagement" is not. A suggestion that touches money, status or
 permissions belongs in a question, not an `ai` rule.
 
+One rule says one thing. `check` warns over 80 units (a Chinese character or
+a word is one unit) and over 20 rules in one feature: split the rule or the
+feature, or drop rules that only restate the document.
+
 ## backend.apis
 
 One item per API or internal task (callbacks, scheduled jobs, message
@@ -298,7 +309,7 @@ permissions.
 | `priority` | yes | `P0`: cannot start, or would build it wrong (data, money, status). `P1`: affects details. `P2`: can be settled during development |
 | `status` | yes | See below |
 | `title` | yes | The question in one plain sentence |
-| `quotes[]` | yes | At least one: `src` and the exact `text` from the document |
+| `quotes[]` | yes | At least one: `src` and the exact `text` from the document; mark a gap with `…`. While the question is open or decided, `check` warns when the text is no longer in that section, or over 150 units |
 | `why` | yes | Why this is a question |
 | `affects[]` | for `P0` | Feature or API IDs it blocks; list the narrowest |
 | `options[]` | yes | 2–3 answers someone can pick as they are: `key`, `text`, `reason` (the cost), `recommended` (at most one) |

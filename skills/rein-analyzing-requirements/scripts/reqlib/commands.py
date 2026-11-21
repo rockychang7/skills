@@ -221,8 +221,7 @@ def cmd_check(args: argparse.Namespace) -> int:
     else:
         path = analysis_path
         _, doc, issues = followed_doc(folder, state, analysis)
-        sections = {s.id for s in parse_sections(doc.read_text(encoding="utf-8"))}
-        issues += check_analysis(analysis, sections, settings.envs())
+        issues += check_analysis(analysis, doc.read_text(encoding="utf-8"), settings.envs(), state["lang"])
         issues += sql.problems(analysis, state, _version_loader(folder, state))
     return finish(
         "check",
@@ -300,7 +299,7 @@ def cmd_render(args: argparse.Namespace) -> int:
     load_version = _version_loader(folder, state)
     frontend = _frontend(folder, args.frontend)
     spec, contract_v = _contract(folder, state)
-    issues += check_analysis(analysis, {s.id for s in parse_sections(doc_text)}, settings.envs())
+    issues += check_analysis(analysis, doc_text, settings.envs(), state["lang"])
     issues += sql.problems(analysis, state, load_version)
     if frontend is not None:
         issues += check_frontend(frontend, analysis) + render.contract_issues(frontend, spec)
@@ -394,7 +393,7 @@ def cmd_send(args: argparse.Namespace) -> int:
     load_version = _version_loader(folder, state)
 
     # 1. What check and render would refuse. Their warnings were seen at render.
-    found = check_analysis(analysis, {s.id for s in parse_sections(doc_text)}, settings.envs())
+    found = check_analysis(analysis, doc_text, settings.envs(), state["lang"])
     found += sql.problems(analysis, state, load_version)
     if frontend is not None:
         found += check_frontend(frontend, analysis) + render.contract_issues(frontend, spec)
@@ -647,14 +646,13 @@ def cmd_status(args: argparse.Namespace) -> int:
             raise Stop(e.issue, exit_code=1, file=str(folder / "analysis.json"))
         analysis = None
     follows, doc, source_issues = followed_doc(folder, state, analysis)
-    sections = {s.id for s in parse_sections(doc.read_text(encoding="utf-8"))}
     try:
         frontend = read_json(folder / "frontend.json", "frontend")
     except JsonProblem as e:
         if not e.issue["code"].endswith(".missing"):
             raise Stop(e.issue, exit_code=1, file=str(folder / "frontend.json"))
         frontend = None
-    fields, issues = report(folder, state, analysis, settings.envs(), sections, _version_loader(folder, state),
+    fields, issues = report(folder, state, analysis, settings.envs(), doc.read_text(encoding="utf-8"), _version_loader(folder, state),
                             frontend, _contract(folder, state)[1], follows, source_issues)
     return finish("status", issues, id=state["id"], dir=str(folder), lang=state["lang"],
                   workspace={"dir": str(workspace), "from": chosen_by}, up_to_date=not issues, **fields)
