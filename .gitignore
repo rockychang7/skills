@@ -15,6 +15,9 @@ Desktop.ini
 # Private notes and plans (not published)
 docs/
 
+# Tests and evaluations: a private repository of their own (not published)
+tests/
+
 # Python
 __pycache__/
 *.pyc
