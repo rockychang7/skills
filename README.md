@@ -24,7 +24,7 @@ npx skills update
 
 | Skill | Description |
 | --- | --- |
-| _None yet_ | |
+| [rein-analyzing-requirements](./skills/rein-analyzing-requirements/SKILL.md) | Turns a product requirement document into an analysis checked against the code, then generates the requirement brief, backend plan, table SQL, release checklist and frontend API guide. When the requirement changes, marks what changed since each reader's last copy and drafts the team notice. Output in Chinese or English. Needs Python 3.9+ (standard library only) |
 
 ## Repository Structure
 

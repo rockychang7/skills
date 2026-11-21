@@ -24,7 +24,7 @@ npx skills update
 
 | Skill | 说明 |
 | --- | --- |
-| _暂无_ | |
+| [rein-analyzing-requirements](./skills/rein-analyzing-requirements/SKILL.md) | 把产品需求文档变成一份对照代码检查过的底稿，再生成需求导读、后端安排、建表 SQL、上线清单、前端接口对接。需求变了，按每个读者上次收到的那版标出改动，并写好群通知。产出可选中文或英文。需要 Python 3.9 及以上（只用标准库） |
 
 ## 目录结构
 
