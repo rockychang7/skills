@@ -89,7 +89,7 @@ from the project directory so that it finds the project settings.
 4. **See the format.** `req.py example`. Copy its shape and level of detail,
    never its content.
 5. **Check against the code.** Find the routes, services, tables and configs
-   the requirement touches (where to look: `references/facts.md`). Only read:
+   the requirement touches (rules for reading: `references/facts.md`). Only read:
    change no code, data or config. Record the code you read as
    `meta.code_commit`.
    Done: every API you mark `modify` has the real route in `path`, and every
@@ -144,7 +144,7 @@ from the project directory so that it finds the project settings.
 | An `ai` rule that decides what users can do or see, what is left out this time, money, status or permissions ("reviews cannot be deleted", "the share page skips reviews") | Make it a question with options; the product owner decides |
 | Routes, table, field or class names in `flows`, `features` or question titles | Product, frontend and backend all read the brief: write it in business words. Technical detail belongs in `backend` |
 | Designing fields or class names in `backend.apis` | Not at analysis time. Say where it is called, what it does now, what to do, what to watch in production, in business words |
-| A `modify` API whose route you cannot find | Search again (`references/facts.md`). Truly missing: it is `new`. Unsure: write a question |
+| A `modify` API whose route you cannot find | Search again. Truly missing: it is `new`. Unsure: write a question |
 | Deleting, splitting or renumbering an item after a render | IDs never change: keep the item with `removed` and a reason; a split-off part takes a new ID |
 | Writing the analysis, or talking to the user, in English because this skill is in English | Talk in the user's language. Write what people read in `lang` from `new`; code names stay as they are |
 | Changing a table after some environment ran its SQL | Keep `sql` the full latest statement and append the change to `patches`; never edit an old patch. Otherwise that environment cannot catch up (`sql.patch-missing`) |

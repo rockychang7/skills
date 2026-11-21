@@ -1,29 +1,12 @@
-# Questions: finding them, writing them, applying answers
+# Questions: writing them, applying answers
 
 A question is anything the document leaves unclear, contradicts, or that
-clashes with the code. You never decide these; the product owner picks an
-answer on the brief.
+clashes with the code. Finding them is your own judgement; this file only
+says how to write them down and what to do with the answers. You never
+decide them: the product owner picks an answer on the brief.
 
-## Where questions hide
-
-Go through the document with this list, feature by feature:
-
-| Look for | Example |
-| --- | --- |
-| Contradictions | One section counts existing signups, another starts from zero |
-| Unclear status changes | An event is unpublished and published again: what happens to its signups in between |
-| Changing something already live | The quota is lowered while people are signed up |
-| Duplicates and concurrency | Tapping twice; two people taking the last place at once |
-| Money and entitlements | Refund on cancel? Retry a reward that failed? |
-| Permissions and ownership | Can a sub-account see or change other people's data |
-| Existing data | Rows created before the release |
-| Counting rules | Count people or signups; by which date |
-| Failures | A third party is down, times out, or returns nothing |
-| Clashes with the code | The code keeps one record per user; the requirement needs several |
-| Edge values | Zero, empty, maximum length, time zones, the exact boundary ("within 24 hours") |
-
-Do not ask about implementation (names, where code goes, which library):
-decide that yourself. Do not ask what the code can tell you: look it up.
+Leave out what is yours to decide (names, where code goes, which library)
+and what the code can tell you: look that up.
 
 ## Writing one
 
