@@ -126,25 +126,44 @@ def parse_sections(text: str) -> list[Section]:
     return sections
 
 
-def section_texts(text: str, ids: set[str]) -> dict[str, dict[str, str]]:
-    """Title and body of the sections in `ids`, for showing cited text on pages."""
+@dataclass
+class Part:
+    """One section with its own text: the lines up to the next section, blank lines dropped."""
+
+    section: Section
+    heading: str  # the full heading text ("3.4 取消报名"); "" for a paragraph
+    body: list[str]
+
+
+def split_sections(text: str) -> tuple[list[str], list[Part]]:
+    """(lines before the first section, every section with its own text), for comparing versions."""
     lines = text.split("\n")
     sections = parse_sections(text)
-    found: dict[str, dict[str, str]] = {}
     headed = bool(_headings(lines))
+    parts: list[Part] = []
     for k, s in enumerate(sections):
-        if s.id not in ids or s.id in found:
-            continue
         if headed:
             end = sections[k + 1].line - 1 if k + 1 < len(sections) else len(lines)
+            m = HEADING.match(lines[s.line - 1])
+            heading = " ".join(m.group(2).split()) if m else s.title
             body = [ln.strip() for ln in lines[s.line:end] if ln.strip()]
         else:  # paragraphs: the section is the paragraph itself
-            body = []
+            heading, body = "", []
             for ln in lines[s.line - 1:]:
                 if not ln.strip():
                     break
                 body.append(ln.strip())
-        found[s.id] = {"title": s.title, "text": "\n".join(body)}
+        parts.append(Part(s, heading, body))
+    first = sections[0].line - 1 if sections else len(lines)
+    return [ln.strip() for ln in lines[:first] if ln.strip()], parts
+
+
+def section_texts(text: str, ids: set[str]) -> dict[str, dict[str, str]]:
+    """Title and body of the sections in `ids`, for showing cited text on pages."""
+    found: dict[str, dict[str, str]] = {}
+    for p in split_sections(text)[1]:
+        if p.section.id in ids and p.section.id not in found:
+            found[p.section.id] = {"title": p.section.title, "text": "\n".join(p.body)}
     return found
 
 

@@ -106,3 +106,42 @@ def save_state(folder: Path, state: dict[str, Any]) -> None:
 
 def latest_doc(folder: Path, state: dict[str, Any]) -> Path:
     return folder / state["docs"][-1]["file"]
+
+
+def doc_file(folder: Path, state: dict[str, Any], v: int) -> Path:
+    return folder / state["docs"][v - 1]["file"]
+
+
+def source_v(analysis: Any) -> int | None:
+    """`meta.source_v` when it is a whole number, else None."""
+    meta = analysis.get("meta") if isinstance(analysis, dict) else None
+    v = meta.get("source_v") if isinstance(meta, dict) else None
+    return v if isinstance(v, int) and not isinstance(v, bool) else None
+
+
+def followed_doc(folder: Path, state: dict[str, Any], analysis: Any) -> tuple[int, Path, list[dict[str, str]]]:
+    """(version, file, issues) of the document the analysis follows: its `meta.source_v`.
+
+    `src` sections are checked against that version and pages show its text,
+    so a newer document changes nothing until the analysis takes it in. A
+    missing or unknown version falls back to the latest (check reports it).
+    """
+    latest = len(state["docs"])
+    v = source_v(analysis)
+    if v is None:
+        return latest, latest_doc(folder, state), []
+    if not 1 <= v <= latest:
+        return latest, latest_doc(folder, state), [issue(
+            "source.unknown-version", "error",
+            "meta.source_v is %d, but the stored document versions are 1 to %d." % (v, latest),
+            hint="Set it to the document version the analysis follows: %d for the latest. The versions are "
+            "listed by new and refresh." % latest, where="meta.source_v")]
+    found = []
+    if v < latest:
+        found.append(issue(
+            "source.behind", "warn",
+            "Document version %d is stored, but the analysis follows version %d." % (latest, v),
+            hint="`refresh --req %s` lists what changed and what it affects. Ask the user before changing the "
+            "analysis; once it takes the changes in, set meta.source_v to %d." % (state.get("name", ""), latest),
+            where="meta.source_v"))
+    return v, doc_file(folder, state, v), found

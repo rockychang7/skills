@@ -87,7 +87,9 @@ def page_list(texts: dict[str, Any], shown: list[str], linked: set[str], current
 
 
 def _meta(state: dict[str, Any], version: int, generated: str) -> dict[str, Any]:
-    return {"id": state["id"], "analysis_v": version, "doc_v": len(state["docs"]), "generated": generated,
+    """Header facts every page shows; doc_v is the document version this analysis version follows."""
+    doc_v = next((v.get("doc_v") for v in state.get("versions") or [] if v["v"] == version), None)
+    return {"id": state["id"], "analysis_v": version, "doc_v": doc_v or len(state["docs"]), "generated": generated,
             "send": None}
 
 

@@ -18,7 +18,8 @@ from .output import Stop, finish, issue, note, summarize
 from .settings import LANGS, Settings, guard_not_in_skill_folder, workspace_suggestions
 from .status import report
 from .steps import for_env
-from .store import by_name, check_name, find, latest_doc, load_state, save_state
+from .refresh import compare_docs, with_impact
+from .store import by_name, check_name, doc_file, find, followed_doc, latest_doc, load_state, save_state, source_v
 
 # How hints name the script; SKILL.md defines `req.py` as the full command.
 RUN = "req.py"
@@ -121,7 +122,7 @@ def cmd_new(args: argparse.Namespace) -> int:
         next=[
             "Read the whole document (%s) and every related image." % (folder / doc_file),
             "See the format: %s example" % RUN,
-            "Write %s, in %s, citing sections as listed above." % (folder / "analysis.json", lang),
+            "Write %s, in %s, citing sections as listed above; meta.source_v is 1." % (folder / "analysis.json", lang),
             "Then: %s check --req %s" % (RUN, args.name),
         ],
     )
@@ -214,9 +215,9 @@ def cmd_check(args: argparse.Namespace) -> int:
         issues = check_frontend(data, analysis) + render.contract_issues(data, _contract(folder, state)[0])
     else:
         path = analysis_path
-        doc = latest_doc(folder, state)
+        _, doc, issues = followed_doc(folder, state, analysis)
         sections = {s.id for s in parse_sections(doc.read_text(encoding="utf-8"))}
-        issues = check_analysis(analysis, sections, settings.envs())
+        issues += check_analysis(analysis, sections, settings.envs())
         issues += sql.problems(analysis, state, _version_loader(folder, state))
     return finish(
         "check",
@@ -262,7 +263,7 @@ def _contract(folder: Path, state: dict, v: object = None) -> tuple[object, obje
     return json.loads((folder / found[0]["file"]).read_text(encoding="utf-8-sig")), found[0]["v"]
 
 
-def _save_version(folder: Path, state: dict, analysis: object, raw: str, frontend: object = None,
+def _save_version(folder: Path, state: dict, analysis: object, raw: str, doc_v: int, frontend: object = None,
                   frontend_raw: str = "", contract_v: object = None) -> tuple[dict, bool]:
     """Store the drafts as a new version unless they equal the latest one.
 
@@ -273,7 +274,7 @@ def _save_version(folder: Path, state: dict, analysis: object, raw: str, fronten
     if versions and versions[-1].get("sha256") == digest:
         return versions[-1], False
     v = len(versions) + 1
-    entry = {"v": v, "file": "versions/analysis-v%d.json" % v, "at": _now().isoformat(), "doc_v": len(state["docs"]),
+    entry = {"v": v, "file": "versions/analysis-v%d.json" % v, "at": _now().isoformat(), "doc_v": doc_v,
              "sha256": digest}
     write_text(folder / entry["file"], raw)
     if frontend is not None:
@@ -289,11 +290,12 @@ def cmd_render(args: argparse.Namespace) -> int:
     settings, folder, state = _requirement(args)
     analysis_path = folder / "analysis.json"
     analysis = _read_source(analysis_path, "Write it first; see the format with: %s example" % RUN)
-    doc_text = latest_doc(folder, state).read_text(encoding="utf-8")
+    doc_v, doc, issues = followed_doc(folder, state, analysis)
+    doc_text = doc.read_text(encoding="utf-8")
     load_version = _version_loader(folder, state)
     frontend = _frontend(folder, args.frontend)
     spec, contract_v = _contract(folder, state)
-    issues = check_analysis(analysis, {s.id for s in parse_sections(doc_text)}, settings.envs())
+    issues += check_analysis(analysis, {s.id for s in parse_sections(doc_text)}, settings.envs())
     issues += sql.problems(analysis, state, load_version)
     if frontend is not None:
         issues += check_frontend(frontend, analysis) + render.contract_issues(frontend, spec)
@@ -310,7 +312,7 @@ def cmd_render(args: argparse.Namespace) -> int:
         base_analysis = load_version(args.since)
         base = {"kind": "version", "v": args.since}
 
-    entry, created = _save_version(folder, state, analysis, analysis_path.read_text(encoding="utf-8-sig"), frontend,
+    entry, created = _save_version(folder, state, analysis, analysis_path.read_text(encoding="utf-8-sig"), doc_v, frontend,
                                    (folder / "frontend.json").read_text(encoding="utf-8-sig") if frontend is not None else "",
                                    contract_v)
     generated = entry["at"].replace("T", " ")[:16]
@@ -373,6 +375,91 @@ def cmd_render(args: argparse.Namespace) -> int:
                   new_version=created, compared_with=base, files=files, not_yet=not_yet)
 
 
+CITED_LIMIT = 15  # citations listed per changed section
+LINES_LIMIT = 20  # was / now lines listed per changed section
+
+
+def _capped(entry: dict) -> dict:
+    """Keep one change entry short; the stored document versions have the rest."""
+    for key, limit in (("was", LINES_LIMIT), ("now", LINES_LIMIT), ("cited_by", CITED_LIMIT)):
+        if len(entry.get(key) or []) > limit:
+            entry["more_" + key] = len(entry[key]) - limit
+            entry[key] = entry[key][:limit]
+    return entry
+
+
+def cmd_refresh(args: argparse.Namespace) -> int:
+    settings, folder, state = _requirement(args)
+    analysis_path = folder / "analysis.json"
+    analysis = _read_source(analysis_path, "") if analysis_path.is_file() else None
+    docs = state["docs"]
+    issues: list = []
+    stored = False
+    if args.doc:
+        doc_path = (_cwd() / Path(args.doc).expanduser()).resolve()
+        text, issues = read_doc(doc_path)
+        if text == latest_doc(folder, state).read_text(encoding="utf-8"):
+            note("The document is the same as stored version %d; nothing was stored." % len(docs))
+        else:
+            v = len(docs) + 1
+            entry = {"v": v, "file": "source/doc-v%d.md" % v, "from": str(doc_path), "at": _now().isoformat()}
+            write_text(folder / entry["file"], text)
+            docs.append(entry)
+            save_state(folder, state)
+            stored = True
+    latest = len(docs)
+    latest_text = latest_doc(folder, state).read_text(encoding="utf-8")
+    sections = parse_sections(latest_text)
+    for dupe in duplicate_ids(sections):
+        issues.append(issue("doc.duplicate-section", "warn", "Section §%s appears more than once in the document." % dupe,
+                            hint="src can only point to the first one; mention this to the user if it matters.",
+                            where=docs[-1]["file"]))
+
+    # Compare with the version the analysis follows; without an analysis, with the one before.
+    base = source_v(analysis) if analysis is not None else None
+    if base is not None and not 1 <= base <= latest:
+        issues += followed_doc(folder, state, analysis)[2]
+        base = None
+    if base is None:
+        base = max(latest - 1, 1)
+    found = {"head": None, "sections": []}
+    if base < latest:
+        found = with_impact(compare_docs(doc_file(folder, state, base).read_text(encoding="utf-8"), latest_text),
+                            analysis)
+    changes = [_capped(e) for e in found["sections"]]
+    summary = {k: sum(1 for e in changes if e["change"] == k) for k in ("added", "removed", "modified", "moved")}
+    name = state.get("name", args.req)
+    fixes = ("rewrite what cites changed or removed sections (drop items no longer wanted with `removed`), write in "
+             "added sections or list them in skipped_sections, renumber src of moved sections, add `changes` "
+             "entries with src, and set meta.source_v to %d" % latest)
+    if analysis is None:
+        steps = ["Write %s from document version %d (meta.source_v %d)." % (analysis_path, latest, latest)]
+    elif base >= latest:
+        steps = []
+        note("The analysis already follows the latest document (version %d)." % latest)
+    elif changes:
+        issues.append(issue(
+            "refresh.impact", "confirm",
+            "Document version %d changes %d section(s) since version %d, the one the analysis follows."
+            % (latest, len(changes), base),
+            hint="Before changing the analysis, tell the user in plain words what changed and what it affects "
+            "(references/changes.md), and wait for a go-ahead. Nothing needs recording.",
+            where="source/doc-v%d.md" % latest))
+        steps = [
+            "Tell the user what changed and what it affects: per entry, was/now, and cited_by, items and apis; "
+            "add code already written for those items on the working branch. Wait for a go-ahead.",
+            "Then update analysis.json: %s." % fixes,
+            "Then: %s check --req %s, and render." % (RUN, name),
+        ]
+    else:
+        steps = ["Only the lines before the first section changed: update meta.doc_version if the version changed, "
+                 "set meta.source_v to %d, then check and render." % latest]
+    return finish("refresh", issues, id=state["id"], stored=stored, doc_v=latest, file=str(latest_doc(folder, state)),
+                  compared={"from": base, "to": latest} if base < latest else None, summary=summary,
+                  head=found["head"], changes=changes, sections=["§%s %s" % (s.id, s.title) for s in sections],
+                  next=steps)
+
+
 def cmd_contract(args: argparse.Namespace) -> int:
     settings, folder, state = _requirement(args)
     source = args.openapi or settings.openapi()
@@ -412,7 +499,7 @@ def cmd_status(args: argparse.Namespace) -> int:
         if not e.issue["code"].endswith(".missing"):
             raise Stop(e.issue, exit_code=1, file=str(folder / "analysis.json"))
         analysis = None
-    doc = latest_doc(folder, state)
+    follows, doc, source_issues = followed_doc(folder, state, analysis)
     sections = {s.id for s in parse_sections(doc.read_text(encoding="utf-8"))}
     try:
         frontend = read_json(folder / "frontend.json", "frontend")
@@ -421,7 +508,7 @@ def cmd_status(args: argparse.Namespace) -> int:
             raise Stop(e.issue, exit_code=1, file=str(folder / "frontend.json"))
         frontend = None
     fields, issues = report(folder, state, analysis, settings.envs(), sections, _version_loader(folder, state),
-                            frontend, _contract(folder, state)[1])
+                            frontend, _contract(folder, state)[1], follows, source_issues)
     return finish("status", issues, id=state["id"], dir=str(folder), lang=state["lang"],
                   workspace={"dir": str(workspace), "from": chosen_by}, up_to_date=not issues, **fields)
 
@@ -496,6 +583,7 @@ HANDLERS = {
     "applied": cmd_applied,
     "steps": cmd_steps,
     "contract": cmd_contract,
+    "refresh": cmd_refresh,
     "status": cmd_status,
     "example": cmd_example,
 }

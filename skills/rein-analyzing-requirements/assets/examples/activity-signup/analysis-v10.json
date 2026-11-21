@@ -3,7 +3,8 @@
   "meta": {
     "title": "活动报名",
     "doc_version": "V1.2-1117",
-    "code_commit": "dev@5d6e7f8"
+    "code_commit": "dev@5d6e7f8",
+    "source_v": 2
   },
   "brief": {
     "what": "景区能给活动开报名、设名额；游客在小程序报名、查看和取消，名额满了可以排候补，报名后会收到提醒。",

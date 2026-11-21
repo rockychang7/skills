@@ -54,8 +54,11 @@ def report(
     load_version: Callable[[int], dict[str, Any]],
     frontend: Any = None,
     contract_v: int | None = None,
+    follows: int | None = None,
+    source_issues: list[dict[str, str]] | None = None,
 ) -> tuple[dict[str, Any], list[dict[str, str]]]:
-    """(fields, issues) for the status result. `frontend` is frontend.json (None: not written)."""
+    """(fields, issues) for the status result. `frontend` is frontend.json (None: not written);
+    `follows` is the document version the analysis follows, `source_issues` what is wrong with it."""
     issues: list[dict[str, str]] = []
     docs = state.get("docs") or []
     versions = state.get("versions") or []
@@ -71,7 +74,7 @@ def report(
 
     saved = last is not None and last.get("sha256") == render.draft_fingerprint(analysis, frontend, contract_v)
     fields["analysis"] = {"exists": True, "version": last["v"] if last else None, "rendered": saved,
-                          "doc_v": last.get("doc_v") if last else None}
+                          "doc_v": follows}
     if not saved:
         issues.append(issue(
             "status.not-rendered", "warn",
@@ -80,13 +83,13 @@ def report(
             hint="Run check, then render. Until then the pages show %s." % (
                 "version %d" % last["v"] if last else "nothing"),
             where="analysis.json"))
-    if last and (last.get("doc_v") or 0) < len(docs):
+    if follows is not None and follows < len(docs):
         issues.append(issue(
             "status.doc-newer", "warn",
-            "Document version %d is newer than the one analysis version %d followed (%d)."
-            % (len(docs), last["v"], last.get("doc_v") or 0),
-            hint="List what changed in the document and what it affects, get the user's go-ahead, update the "
-            "analysis with a `changes` entry, then render.", where="source"))
+            "Document version %d is newer than the one the analysis follows (%d)." % (len(docs), follows),
+            hint="`refresh --req %s` lists what changed and what it affects. Tell the user and wait for a "
+            "go-ahead, then update the analysis (references/changes.md) and render." % state.get("name", ""),
+            where="meta.source_v"))
 
     questions = [q for q in analysis.get("questions") or [] if isinstance(q, dict)]
     open_qs = [q for q in questions if q.get("status") == "open"]
@@ -136,7 +139,8 @@ def report(
             environments.append({"env": env, "ran": ran, "to_run": to_run})
     fields["environments"] = environments
 
-    found = check_analysis(analysis, sections, envs) + sql.problems(analysis, state, load_version)
+    found = [i for i in source_issues or [] if i["level"] != "warn"]  # being behind is reported above
+    found += check_analysis(analysis, sections, envs) + sql.problems(analysis, state, load_version)
     counts = summarize(found)
     fields["check"] = counts
     if counts.get("error") or counts.get("confirm"):

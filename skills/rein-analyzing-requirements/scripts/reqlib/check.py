@@ -29,7 +29,7 @@ ANALYSIS_SPEC: dict[str, dict[str, str]] = {
         "prototypes": "prototypes", "features": "[feature]!", "backend": "backend", "release": "[release]",
         "questions": "[question]", "changes": "[change]", "confirmations": "[confirmation]",
     },
-    "meta": {"title": "str!", "doc_version": "str", "code_commit": "str!"},
+    "meta": {"title": "str!", "doc_version": "str", "code_commit": "str!", "source_v": "int!"},
     "brief": {"what": "str!", "value": "str"},
     "role": {"id": "str!", "name": "str!", "does": "str!"},
     "client": {"id": "str!", "name": "str!", "where": "str"},

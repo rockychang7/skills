@@ -279,13 +279,18 @@ def build_parser() -> argparse.ArgumentParser:
     p = _add_command(
         sub,
         "refresh",
-        "store a new version of the document",
-        "Store a new version of the requirement document and list what changed,\n"
-        "section by section.",
-        ["refresh --req activity-signup --doc prd-v2.md"],
+        "store a new version of the document and list what changed",
+        "Store a new version of the requirement document (unless it is the same as\n"
+        "the latest), then list what changed since the version the analysis follows\n"
+        "(meta.source_v), section by section: added, removed, changed (old and new\n"
+        "lines) and moved (renumbered) sections, each with what in the analysis\n"
+        "cites it. Sections are matched by content, so renumbering is caught.\n"
+        "Without --doc, lists the changes the analysis has not taken in yet.\n"
+        "Changes nothing in the analysis: ask the user before updating it.",
+        ["refresh --req activity-signup --doc prd-v2.md", "refresh --req activity-signup"],
     )
     _add_req_options(p)
-    p.add_argument("--doc", required=True, metavar="FILE", help="the new version of the document")
+    p.add_argument("--doc", metavar="FILE", help="the new version of the document (Markdown or text)")
 
     p = _add_command(
         sub,

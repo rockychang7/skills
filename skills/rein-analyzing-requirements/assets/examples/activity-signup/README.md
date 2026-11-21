@@ -32,6 +32,7 @@ manage signups in a web admin. Generated files are in Chinese (`zh-CN`).
 
 - Two flows (`P1` sign up, `P2` cancel and refill) with decisions, labelled
   branches and end steps; v3 → v10 adds the waitlist branch and the refill steps.
+- `meta.source_v`: analysis v3 follows document version 1, v10 follows version 2.
 - Append-only change notes: the two entries from v3 are still at the bottom of
   v10's `changes`; everything above them was added after send 1.
 - A removed feature and API (`B03`, `B3`) keep their IDs with `removed`.

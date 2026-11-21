@@ -56,7 +56,8 @@ from the project directory so that it finds the project settings.
 | The user wants to release, or bring an environment up to date (text copied with the release checklist's "hand it to an AI" box) | `steps --req <name> --env <env>` says what that environment needs and how to check each step, not how. Carry each step out with the tools this session has (another skill or command that submits SQL, changes configs, deploys); check it as the step says. Nothing to do it with: give the user the steps; the release checklist has them ready to copy |
 | An environment's tables now have the changes ("test has it", or you just applied them) | `applied --env <env> --v <version>`, then `render`. The version is on the first line of the SQL file used; if the user does not know which file, ask: a wrong version gives that environment the wrong statements |
 | The APIs exist in code and the user wants the frontend guide | Write `frontend.json` by `references/frontend.md`; store the API description with `contract --req <name> --openapi <file or URL>` (again whenever the APIs change); `check --frontend`; `render` |
-| The document changed; send the files | Not available in this version: tell the user. A copy written by hand would drift from the analysis |
+| The document changed: a new file, link or pasted text | `references/changes.md`, "The document changed" |
+| Send the files | Not available in this version: tell the user. A copy written by hand would drift from the analysis |
 
 ## New requirement
 
@@ -110,6 +111,9 @@ from the project directory so that it finds the project settings.
 - **`check` reports `confirm` items.** List each one in plain words (what,
   why, what happens if not), wait for the answer, record it in
   `confirmations`.
+- **`refresh` reports `refresh.impact`.** Tell the user what the new
+  document changes and what that affects (`references/changes.md`), and wait
+  for a go-ahead before changing the analysis.
 - **`render` reports `render.kept-manual`.** Someone edited the page by hand.
   Ask whether those edits matter: copy what matters into `analysis.json` and
   render again, or render with `--force` to replace the page.

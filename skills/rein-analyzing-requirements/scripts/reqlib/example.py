@@ -54,6 +54,7 @@ def _cap_lists(item: dict[str, Any], keys: tuple[str, ...]) -> None:
 
 def analysis_sample() -> dict[str, Any]:
     a = copy.deepcopy(_load(FULL_ANALYSIS))
+    a["meta"]["source_v"] = 1  # what a new requirement has; the full example follows document version 2
     b = a["backend"]
     a["features"] = _pick(a["features"], "id", KEEP["features"])
     b["apis"] = _pick(b["apis"], "id", KEEP["apis"])

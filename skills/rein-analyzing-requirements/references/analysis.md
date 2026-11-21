@@ -87,6 +87,7 @@ Leave out an optional field rather than writing `""` or `[]`.
 | `meta.title` | yes | Requirement name |
 | `meta.doc_version` | no | The version the document gives itself |
 | `meta.code_commit` | yes | Code the analysis was checked against: `branch@commit`, e.g. `dev@1a2b3c4` |
+| `meta.source_v` | yes | The stored document version the analysis follows: `1` after `new`. After `refresh` stores a newer one, raise it once the analysis takes in that version's changes. Every `src` names sections of this version |
 | `brief.what` | yes | One or two sentences: what this is and how it is used, readable without technical knowledge |
 | `brief.value` | no | What it brings |
 | `roles[]` | yes | People and parts of the system in the flow: `id`, `name`, `does` (one sentence) |
