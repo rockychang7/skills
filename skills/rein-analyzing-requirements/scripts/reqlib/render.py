@@ -27,6 +27,7 @@ from .output import issue
 ASSETS = Path(__file__).resolve().parents[2] / "assets"
 PAGES = ("brief", "plan", "sql", "release", "frontend")
 READY = ("brief", "plan", "sql", "release", "frontend")  # pages this version can generate
+SWITCH = ("brief", "plan", "release", "frontend")  # pages whose working copy can switch between comparisons
 SECTION_REF = re.compile(r"§\s*(\d+(?:\.\d+)*)")
 
 
@@ -104,6 +105,19 @@ def _fill(page: str, analysis: dict[str, Any], lang: str, texts: dict[str, Any],
             .replace("__REQ_DATA__", payload))
 
 
+def _view_diffs(views: list[dict[str, Any]], compare: Any, analysis: dict[str, Any]) -> dict[str, Any]:
+    """{view key: change marks against that view's base, or None for a view without one}."""
+    return {v["key"]: dict(compare(v["analysis"], analysis), base=v["base"]) if v["base"] else None for v in views}
+
+
+def _switch(data: dict[str, Any], views: list[dict[str, Any]] | None, compare: Any, analysis: dict[str, Any]) -> None:
+    """Give a working copy every comparison it can switch to; the first is shown by default."""
+    if views:
+        data["diffs"] = _view_diffs(views, compare, analysis)
+        data["vs"] = views[0]["key"]
+        data["diff"] = data["diffs"][data["vs"]]
+
+
 def brief_html(
     analysis: dict[str, Any],
     state: dict[str, Any],
@@ -115,7 +129,10 @@ def brief_html(
     base_analysis: dict[str, Any] | None = None,
     pages: list[dict[str, Any]] | None = None,
     send: dict[str, Any] | None = None,
+    views: list[dict[str, Any]] | None = None,
 ) -> str:
+    """The requirement brief. `views` (working copies only) are the comparisons the page can switch
+    between: [{"key": "send" or "prev", "base": …, "analysis": the base version}], the first shown."""
     shown = {k: v for k, v in analysis.items() if k != "skipped_sections"}  # skipped sections are never shown
     cited = set(SECTION_REF.findall(json.dumps(shown, ensure_ascii=False)))
     data = {
@@ -127,6 +144,7 @@ def brief_html(
         "sections": section_texts(doc_text, cited),
         "diff": dict(diffs.compare(base_analysis, analysis), base=base) if base and base_analysis is not None else None,
     }
+    _switch(data, views, diffs.compare, analysis)
     return _fill("brief", analysis, state["lang"], texts, data)
 
 
@@ -143,10 +161,11 @@ def plan_html(
     base_analysis: dict[str, Any] | None = None,
     pages: list[dict[str, Any]] | None = None,
     send: dict[str, Any] | None = None,
+    views: list[dict[str, Any]] | None = None,
 ) -> str:
     """The backend plan: build order, who does what, each task, tables, data, config, risks.
 
-    It links into the brief only when `pages` gives the brief a file.
+    It links into the brief only when `pages` gives the brief a file. `views`: as for the brief.
     """
     brief = [p.get("file") for p in pages or [] if p["page"] == "brief"]
     data = {
@@ -160,6 +179,7 @@ def plan_html(
         "diff": dict(diffs.compare_backend(base_analysis, analysis), base=base)
         if base and base_analysis is not None else None,
     }
+    _switch(data, views, diffs.compare_backend, analysis)
     return _fill("plan", analysis, state["lang"], texts, data)
 
 
@@ -266,8 +286,13 @@ def frontend_html(
     base_spec: dict[str, Any] | None = None,
     pages: list[dict[str, Any]] | None = None,
     send: dict[str, Any] | None = None,
+    views: list[dict[str, Any]] | None = None,
 ) -> str:
-    """The frontend API guide: per client, pages, APIs with fields from the API description, display rules."""
+    """The frontend API guide: per client, pages, APIs with fields from the API description, display rules.
+
+    `views`: as for the brief, each also with the `frontend` and `spec` of its base version. Field
+    marks sit inside each client's API rows, so every view carries its own clients (`view_clients`).
+    """
     t = texts["frontend"]
     compared = base is not None and base_analysis is not None
     clients, marks = _frontend_clients(analysis, frontend, spec, t, base_analysis if compared else None,
@@ -291,6 +316,19 @@ def frontend_html(
         "diff": dict(marks, base=base, new_changes=len(diffs.new_notes(base_frontend or {}, frontend)))
         if compared else None,
     }
+    if views:
+        data["diffs"], data["view_clients"] = {}, {}
+        for v in views:
+            if v["base"]:
+                rows, found = _frontend_clients(analysis, frontend, spec, t, v["analysis"], v["frontend"], v["spec"])
+                data["diffs"][v["key"]] = dict(found, base=v["base"],
+                                               new_changes=len(diffs.new_notes(v["frontend"] or {}, frontend)))
+            else:
+                rows = _frontend_clients(analysis, frontend, spec, t, None, None, None)[0]
+                data["diffs"][v["key"]] = None
+            data["view_clients"][v["key"]] = rows
+        data["vs"] = views[0]["key"]
+        data["diff"], data["clients"] = data["diffs"][data["vs"]], data["view_clients"][data["vs"]]
     return _fill("frontend", analysis, state["lang"], texts, data)
 
 
@@ -314,10 +352,11 @@ def release_html(
     base_analysis: dict[str, Any] | None = None,
     pages: list[dict[str, Any]] | None = None,
     send: dict[str, Any] | None = None,
+    views: list[dict[str, Any]] | None = None,
 ) -> str:
     """The release checklist: steps by stage for the environment picked on the page.
 
-    `envs` is [(name, version it ran or None)]; `sql_rows` is sql.release_rows.
+    `envs` is [(name, version it ran or None)]; `sql_rows` is sql.release_rows. `views`: as for the brief.
     """
     brief = [p.get("file") for p in pages or [] if p["page"] == "brief"]
     data = {
@@ -335,6 +374,7 @@ def release_html(
         "diff": dict(diffs.compare_release(base_analysis, analysis), base=base)
         if base and base_analysis is not None else None,
     }
+    _switch(data, views, diffs.compare_release, analysis)
     return _fill("release", analysis, state["lang"], texts, data)
 
 
@@ -420,29 +460,39 @@ class Job:
         return self.frontend_diff(v)["items"]
 
     def contents(self, page: str, base: dict[str, Any] | None = None, send: dict[str, Any] | None = None,
-                 pages: list[dict[str, Any]] | None = None) -> list[tuple[str, str, dict[str, Any]]]:
+                 pages: list[dict[str, Any]] | None = None,
+                 views: list[dict[str, Any]] | None = None) -> list[tuple[str, str, dict[str, Any]]]:
         """(file name, content, extra fields) for each file of a page.
 
         `base` ({"kind": "send" or "version", "v": …}) is what change marks compare with; `send`
-        ({"no", "date"}) the send this copy belongs to.
+        ({"no", "date"}) the send this copy belongs to. `views` ([{"key", "base"}], working copies)
+        are the comparisons a page in SWITCH can switch between, the first shown; `base` is then ignored.
         """
         a, s, v, t = self.analysis, self.state, self.entry["v"], self.texts
+        loaded = None
+        if views:
+            loaded = []
+            for x in views:
+                drafts = self.base_drafts(x["base"]["v"]) if x["base"] else (None, None, None)
+                loaded.append(dict(x, analysis=drafts[0], frontend=drafts[1], spec=drafts[2]))
+            base = None  # the views carry the comparisons
         base_analysis = self.load_version(base["v"]) if base else None
         if page == "brief":
             return [(self.names[page], brief_html(a, s, v, self.generated, self.doc_text, t, base, base_analysis,
-                                                  pages, send), {})]
+                                                  pages, send, loaded), {})]
         if page == "plan":
-            return [(self.names[page], plan_html(a, s, v, self.generated, t, base, base_analysis, pages, send), {})]
+            return [(self.names[page], plan_html(a, s, v, self.generated, t, base, base_analysis, pages, send,
+                                                 loaded), {})]
         if page == "frontend":
             base_frontend = base_spec = None
             if base:
                 _, base_frontend, base_spec = self.base_drafts(base["v"])
             return [(self.names[page], frontend_html(a, self.frontend, s, v, self.generated, t, self.spec,
                                                      self.contract_v, base, base_analysis, base_frontend, base_spec,
-                                                     pages, send), {})]
+                                                     pages, send, loaded), {})]
         if page == "release":
             rows = sql.release_rows(a, s, self.envs, v, self.load_version, t, self.sql_files)
             return [(self.names[page], release_html(a, s, v, self.generated, t, sql.env_rows(s, self.envs), rows,
-                                                    base, base_analysis, pages, send), {})]
+                                                    base, base_analysis, pages, send, loaded), {})]
         return [(name, sql.build(a, db, v, self.generated, s["id"], s, self.envs, self.load_version, t), {"db": db})
                 for db, name in self.sql_files.items()]

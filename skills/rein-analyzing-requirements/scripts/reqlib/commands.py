@@ -356,8 +356,15 @@ def _write_working(job: render.Job, making: list, wanted: list, base: object, fo
     issues: list = []
     for page in making:
         pages = render.page_list(job.texts, shown, linked, page, job.names)
-        page_base, send = (base, None) if base else sends.working_view(state.get("sends") or [], page, v)
-        for name, content, extra in job.contents(page, page_base, send, pages):
+        views = None
+        if base:
+            page_base, send = base, None
+        else:
+            page_base, send = sends.working_view(state.get("sends") or [], page, v)
+            if page in render.SWITCH:
+                views = sends.views(state.get("sends") or [], page, v, page_base) or None
+                page_base = views[0]["base"] if views else page_base
+        for name, content, extra in job.contents(page, page_base, send, pages, views):
             result, found = render.write_page(folder, name, content, state, v, force)
             files.append(dict(result, page=page, compared_with=page_base, **extra))
             issues += found

@@ -242,8 +242,9 @@ def build_parser() -> argparse.ArgumentParser:
         "confirm items), save it as a new version if it changed, then generate the\n"
         "pages into out/. Pages that are not needed are not generated. A page\n"
         "someone edited by hand is kept and the new one is saved beside it.\n"
-        "Change marks compare with the copy last sent; before anything is sent\n"
-        "there are none, unless --since names a version to compare with.",
+        "Change marks compare with the copy of the page last sent, and the page can\n"
+        "switch to the previous version; a page never sent compares with the\n"
+        "previous version. --since names any version to compare with instead.",
         [
             "render --req activity-signup",
             "render --req activity-signup --since 3",

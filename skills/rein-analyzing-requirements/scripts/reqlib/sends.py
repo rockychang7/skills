@@ -153,3 +153,17 @@ def working_view(sends: list[dict[str, Any]], page: str, v: int) -> tuple[dict[s
     copy = next((c for c in last.get("copies") or [] if c["page"] == page), {})
     before = next((s for s in sends if s["no"] == copy.get("base")), None)
     return (base_meta(before) if before else None), {"no": last["no"], "date": short_date(last["at"])}
+
+
+def views(sends: list[dict[str, Any]], page: str, v: int, send_base: dict[str, Any] | None) -> list[dict[str, Any]]:
+    """The comparisons a working copy can switch between, the default first.
+
+    "send": what readers will see (the copy last sent, or how that copy compared); "prev": the
+    version before this one, for checking the latest edit. A page never sent opens on "prev".
+    """
+    out = []
+    if last_send(sends, page) is not None:
+        out.append({"key": "send", "base": send_base})
+    if v > 1:
+        out.append({"key": "prev", "base": {"kind": "version", "v": v - 1}})
+    return out

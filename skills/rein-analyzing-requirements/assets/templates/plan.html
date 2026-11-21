@@ -162,6 +162,12 @@ code { font-family: var(--mono); font-size: .88em; background: var(--sunk); bord
 a.st:hover { text-decoration: none; border-color: var(--ink-3); }
 .st-l { font-size: 12.5px; color: var(--ink-3); }
 .st-v { font-size: 19px; font-weight: 700; line-height: 1.4; }
+.st a.st-v { color: var(--ink); justify-self: start; }
+.st.chg a.st-v { color: var(--mod); }
+.st a.st-v:hover { text-decoration: underline; text-underline-offset: 4px; }
+.seg.vs { justify-self: start; padding: 2px; border-radius: 8px; margin: -3px 0 1px -2px; }
+.seg.vs button { padding: 2px 9px; font-size: 12px; border-radius: 6px; }
+.kicker .latest { color: var(--ink-3); }
 .st-s { font-size: 13px; color: var(--ink-2); line-height: 1.6; }
 .st.go { background: var(--add-bg); border-color: transparent; } .st.go .st-v { color: var(--add); }
 .st.wait { background: var(--k-ask-bg); border-color: transparent; } .st.wait .st-v { color: var(--k-ask); }
@@ -309,7 +315,7 @@ tr.ln.is-chg::before { display: none; }
 .card.gone { background: transparent; box-shadow: none; border-style: dashed; padding-block: 14px; }
 .card.gone h3, .card.gone .card-h .id { text-decoration: line-through; color: var(--ink-3); }
 .card.gone .sum { color: var(--ink-3); }
-.card.is-chg { border-color: color-mix(in srgb, var(--c) 45%, var(--rule)); }
+.card.is-chg, .card.chg-modify { border-color: color-mix(in srgb, var(--c) 45%, var(--rule)); }
 .banner { margin-top: 14px; padding: 9px 14px; border-radius: 10px; background: var(--k-ask-bg); color: var(--k-ask); font-size: 13.5px; font-weight: 600; }
 .banner.soft { background: var(--sunk); color: var(--ink-2); font-weight: 500; }
 .banner a { color: inherit; text-decoration: underline; text-underline-offset: 3px; }
@@ -395,6 +401,34 @@ pre code { background: none; border: 0; padding: 0; font-size: inherit; }
 (function () {
   "use strict";
   var D = JSON.parse(document.getElementById("req-data").textContent);
+  /* A working copy carries change marks for each comparison it offers (D.diffs: "send" = what readers
+     see, "prev" = since the version before); ?vs= picks one, otherwise D.vs. Sent copies have only D.diff. */
+  var VS = null;
+  if (D.diffs) {
+    var askedVs = (location.search.match(/[?&]vs=(send|prev)(?:&|$)/) || [])[1];
+    VS = askedVs && D.diffs.hasOwnProperty(askedVs) ? askedVs : D.vs;
+    D.diff = D.diffs[VS];
+    if (D.view_clients) D.clients = D.view_clients[VS];
+  }
+  /* The change tile's label; a working copy offering two comparisons shows the switch instead,
+     each button's tooltip naming the exact copy or version. */
+  function vsLabel(label) {
+    var keys = D.diffs ? Object.keys(D.diffs) : [];
+    if (keys.length < 2) return '<span class="st-l">' + h(label) + "</span>";
+    return '<span class="seg vs" role="group" aria-label="' + h(t("vs_label")) + '">' + keys.map(function (k) {
+      var b = D.diffs[k] && D.diffs[k].base;
+      var tip = !b ? t("vs_first") : b.kind === "send" ? t("base_send", { n: b.no, date: b.date }) : t("base_version", { v: b.v });
+      return '<button type="button" data-vs="' + k + '" aria-pressed="' + (k === VS) + '" title="' + h(tip) + '">' +
+        h(t(k === "send" ? "vs_send" : "vs_prev")) + "</button>";
+    }).join("") + "</span>";
+  }
+  /* Switching reloads with ?vs=, keeping the rest of the link (a picked client, say). */
+  document.addEventListener("click", function (e) {
+    var b = e.target.closest && e.target.closest("[data-vs]");
+    if (!b || b.dataset.vs === VS) return;
+    var rest = location.search.replace(/^\?/, "").split("&").filter(function (p) { return p && p.indexOf("vs=") !== 0; });
+    location.search = "?" + rest.concat("vs=" + b.dataset.vs).join("&");
+  });
   var A = D.analysis, T = D.t, M = D.meta, X = D.diff || { items: {}, lists: {}, old: {} };
   var KEY = "req-plan:" + M.id;
 
@@ -605,9 +639,10 @@ pre code { background: none; border: 0; padding: 0; font-size: inherit; }
     var c2 = '<a class="st who" href="#assign" id="c-who"></a>';
     var c3 = '<a class="st" href="#assign" id="c-prog"></a>';
     var c4 = base ?
-      '<a class="st chg" href="#changes" id="c-chg"><span class="st-l">' + h(t("c_chg_l", baseVars)) + '</span><span class="st-v">' +
-        h(t("c_chg_v", { n: X.total })) + '</span><span class="st-s">' + h(t("c_chg_s")) + "</span></a>" :
-      '<div class="st"><span class="st-l">' + h(t("tb_send")) + '</span><span class="st-v">' + h(t("c_draft")) + '</span><span class="st-s">' + h(t("c_draft_s")) + "</span></div>";
+      '<div class="st' + (X.total ? " chg" : "") + '">' + vsLabel(t("c_chg_l", baseVars)) + '<a class="st-v" href="#changes" id="c-chg">' +
+        h(X.total ? t("c_chg_v", { n: X.total }) : t("c_chg_none")) + '</a><span class="st-s">' + h(X.total ? t("c_chg_s") : "") + "</span></div>" :
+      '<div class="st">' + vsLabel(t("tb_send")) + '<span class="st-v">' + h(t(M.send ? "vs_first" : "c_draft")) + '</span><span class="st-s">' +
+        h(t(M.send ? "c_first_s" : "c_draft_s")) + "</span></div>";
 
     var hold = blocked.length ? '<div class="hold" id="hold"><h2>' + h(t("hold_h")) + "</h2><ul>" + blocked.map(function (x) {
       return hard[x.id].map(function (q) {
@@ -618,7 +653,8 @@ pre code { background: none; border: 0; padding: 0; font-size: inherit; }
     }).join("") + "</ul></div>" : "";
 
     return '<header class="cover wrap" id="cover"><div class="cover-top"><div>' +
-      '<div class="kicker">' + h(M.send ? t("kicker", { n: M.send.no, date: M.send.date }) : t("kicker_draft")) + "</div>" +
+      '<div class="kicker">' + (M.send ? h(t("kicker", { n: M.send.no, date: M.send.date })) + ' <span class="latest">' + h(t("kicker_latest")) + "</span>" :
+        h(t("kicker_draft"))) + "</div>" +
       "<h1>" + h(A.meta.title) + '</h1><p class="lead">' + lead + "</p></div>" +
       '<dl class="tblock">' + tb + "</dl></div>" +
       '<div class="status">' + c1 + c2 + c3 + c4 + "</div>" + hold + "</header>";
@@ -798,7 +834,9 @@ pre code { background: none; border: 0; padding: 0; font-size: inherit; }
       feats ? [t("f_feat"), '<div class="chips">' + feats + "</div>"] : null
     ].filter(Boolean).map(function (r) { return "<dt>" + h(r[0]) + '</dt><dd class="' + (r[2] || "") + '">' + r[1] + "</dd>"; }).join("");
     var mine = risks.filter(function (r) { return arr(r.apis).indexOf(x.id) >= 0; }).map(function (r) { return r.text; });
-    return '<article class="card' + (base && s ? " is-chg chg-" + s : "") + '" id="api-' + h(x.id) + '" data-card="' + h(x.id) + '" data-side="' + h(x.side) + '" data-changed="' + (base && s ? 1 : 0) + '">' + head +
+    /* The card is a stop of its own only when the API itself changed; changed todo / online lines are their own stops. */
+    var stop = base && s && (s !== "modify" || arr(X.heads).indexOf("api:" + x.id) >= 0);
+    return '<article class="card' + (stop ? " is-chg chg-" + s : base && s ? " chg-" + s : "") + '" id="api-' + h(x.id) + '" data-card="' + h(x.id) + '" data-side="' + h(x.side) + '" data-changed="' + (base && s ? 1 : 0) + '">' + head +
       '<p class="sum">' + (x.kind === "modify" ? "<b>" + h(t("f_becomes")) + "</b>" : "") + rich(x.does) + was("does") + "</p>" + banner +
       '<dl class="facts">' + facts + "</dl>" +
       listPart(t("f_todo"), "api:" + x.id + ":todo", x.todo, "", true) +
@@ -942,7 +980,8 @@ pre code { background: none; border: 0; padding: 0; font-size: inherit; }
   });
 
   var only = $("#only-changes");
-  function changedEls() { return $$(".is-chg").filter(function (el) { return el.offsetParent !== null && !el.closest(".gone-t"); }); }
+  /* Stops for the change arrows: each change once, where it is described. The "who does what" table only sums up the cards. */
+  function changedEls() { return $$(".is-chg").filter(function (el) { return el.offsetParent !== null && !el.closest(".gone-t") && !el.closest("#assign-body"); }); }
   var pos = -1;
   function go(step) {
     var list = changedEls();

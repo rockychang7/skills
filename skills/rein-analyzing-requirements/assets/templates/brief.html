@@ -180,6 +180,12 @@ button { font: inherit; color: inherit; }
 .st.wait .st-v { color: var(--k-ask); }
 .st.hot .st-v { color: var(--p0); }
 .st.chg .st-v { color: var(--mod); }
+.st a.st-v { color: var(--ink); justify-self: start; }
+.st.chg a.st-v { color: var(--mod); }
+.st a.st-v:hover { text-decoration: underline; text-underline-offset: 4px; }
+.seg.vs { justify-self: start; padding: 2px; border-radius: 8px; margin: -3px 0 1px -2px; }
+.seg.vs button { padding: 2px 9px; font-size: 12px; border-radius: 6px; }
+.kicker .latest { color: var(--ink-3); }
 .hold { margin-top: 12px; border-radius: var(--r); background: var(--k-ask-bg); padding: 12px 14px; }
 .hold h2 { font-size: 13px; font-weight: 700; color: var(--k-ask); letter-spacing: .06em; margin: 0 0 8px 2px; }
 .hold ul { display: grid; gap: 6px; }
@@ -250,6 +256,7 @@ body.only-changes [data-delta="0"] { opacity: .4; }
 .flow-h { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; margin-bottom: 10px; }
 .flow-h h3 { font-size: 16px; display: inline-flex; align-items: baseline; gap: 8px; }
 .flow-h p { font-size: 13.5px; color: var(--ink-3); }
+.flow-h .was { flex-basis: 100%; }
 .flow-box { overflow-x: auto; border: 1px solid var(--rule); border-radius: var(--r); background: var(--page); }
 .fl { position: relative; display: grid; column-gap: 20px; row-gap: 46px; padding: 0 20px 26px; min-width: min-content; }
 .lane-bg { position: relative; z-index: 0; margin-inline: -10px; }
@@ -451,6 +458,14 @@ tr.ln.is-chg::before { display: none; }
 (function () {
   "use strict";
   var D = JSON.parse(document.getElementById("req-data").textContent);
+  /* A working copy carries change marks for each comparison it offers (D.diffs: "send" = what readers
+     see, "prev" = since the version before); ?vs= picks one, otherwise D.vs. Sent copies have only D.diff. */
+  var VS = null;
+  if (D.diffs) {
+    var askedVs = (location.search.match(/[?&]vs=(send|prev)(?:&|$)/) || [])[1];
+    VS = askedVs && D.diffs.hasOwnProperty(askedVs) ? askedVs : D.vs;
+    D.diff = D.diffs[VS];
+  }
   var A = D.analysis, T = D.t, M = D.meta, X = D.diff || { items: {}, lists: {} };
   var KEY = "req-brief:" + M.id;
 
@@ -627,14 +642,29 @@ tr.ln.is-chg::before { display: none; }
     var qs = '<a class="st' + (p0 ? " hot" : "") + '" href="#questions"><span class="st-l">' + h(t("st_q")) + '</span><span class="st-v">' +
       h(openQs.length ? t("st_q_v", { n: openQs.length }) : t("st_q_none")) + '</span><span class="st-s">' + h(openQs.length ? t("st_q_sub", { n: p0 }) : "") + "</span></a>";
     var chg = base ?
-      '<a class="st chg" href="#changes"><span class="st-l">' + h(t("st_chg", baseVars)) + '</span><span class="st-v">' + h(t("st_chg_v", { n: X.total })) + '</span><span class="st-s">' +
-      h(t("st_chg_sub", { add: X.add, modify: X.modify, remove: X.remove })) + "</span></a>" :
-      '<div class="st"><span class="st-l">' + h(t("tb_send")) + '</span><span class="st-v">' + h(t(M.send ? "st_chg_first" : "st_draft")) + '</span><span class="st-s">' +
+      '<div class="st' + (X.total ? " chg" : "") + '">' + stTop(t("st_chg", baseVars)) +
+      '<a class="st-v" href="#changes">' + h(X.total ? t("st_chg_v", { n: X.total }) : t("st_chg_none")) + '</a><span class="st-s">' +
+      h(X.total ? t("st_chg_sub", { add: X.add, modify: X.modify, remove: X.remove }) : "") + "</span></div>" :
+      '<div class="st">' + stTop(t("tb_send")) + '<span class="st-v">' + h(t(M.send ? "st_chg_first" : "st_draft")) + '</span><span class="st-s">' +
       h(t(M.send ? "st_chg_first_sub" : "st_draft_sub")) + "</span></div>";
     var hold = held.length ? '<div class="hold" id="hold"><h2>' + h(t("hold_title")) + "</h2><ul>" + held.map(function (x) {
       return "<li><b>" + h(x.name) + '</b><a class="wait-chip" href="#q-' + h(x.q.id) + '">' + h(t("hold_wait", { q: x.q.id })) + '</a><span class="hq">' + h(x.q.title) + "</span></li>";
     }).join("") + "</ul></div>" : "";
     return '<div class="status">' + ready + qs + chg + "</div>" + hold;
+  }
+  /* The change tile's label. A working copy offering two comparisons shows the switch instead;
+     each button's tooltip names the exact copy or version. */
+  function stTop(label) {
+    var keys = D.diffs ? Object.keys(D.diffs) : [];
+    if (keys.length < 2) return '<span class="st-l">' + h(label) + "</span>";
+    return '<span class="seg vs" role="group" aria-label="' + h(t("vs_label")) + '">' + keys.map(function (k) {
+      var b = D.diffs[k] && D.diffs[k].base;
+      var tip = !b ? t("st_chg_first") : b.kind === "send" ? t("base_send", { n: b.no, date: b.date }) : t("base_version", { v: b.v });
+      return '<button type="button" data-vs="' + k + '" aria-pressed="' + (k === VS) + '" title="' + h(tip) + '">' + h(t(k === "send" ? "vs_send" : "vs_prev")) + "</button>";
+    }).join("") + "</span>";
+  }
+  function kicker() {
+    return M.send ? h(t("kicker", { n: M.send.no, date: M.send.date })) + ' <span class="latest">' + h(t("kicker_latest")) + "</span>" : h(t("kicker_draft"));
   }
   function fRow(f) {
     var s = state("feature:" + f.id);
@@ -668,7 +698,7 @@ tr.ln.is-chg::before { display: none; }
   }
   function cover() {
     return '<header class="cover" id="overview"><div class="cover-top"><div>' +
-      '<div class="kicker">' + h(t("doc_kind")) + '</div><h1>' + h(A.meta.title) + '</h1><p class="lead">' + h(A.brief.what) + "</p>" +
+      '<div class="kicker">' + kicker() + '</div><h1>' + h(A.meta.title) + '</h1><p class="lead">' + h(A.brief.what) + "</p>" +
       (A.brief.value ? '<p class="why"><b>' + h(t("why_label")) + "</b>" + h(A.brief.value) + "</p>" : "") +
       "</div>" + tblock() + "</div>" + status() + scope() + "</header>";
   }
@@ -784,9 +814,13 @@ tr.ln.is-chg::before { display: none; }
       '</span><span><i class="lg-end"></i>' + h(t("legend_end")) + "</span><span>" + h(t("legend_line")) + "</span></div>";
     var tl = legend + '<div class="flows">' + flows.map(function (fw) {
       var gone = arr((X.removed_steps || {})[fw.id]);
-      return '<div class="flow" id="flow-' + h(fw.id) + '"><div class="flow-h"><h3>' + h(fw.name) + mark(state("flow:" + fw.id)) + "</h3>" +
-        (fw.summary ? "<p>" + h(fw.summary) + "</p>" : "") + "</div>" + '<p class="flow-hint">' + h(t("flow_scroll_hint")) + "</p>" + flowDiagram(fw) +
-        (gone.length && base ? '<p class="flow-gone">' + h(t("flow_removed")) + gone.map(function (s) { return "<s>" + h(s.text) + "</s>"; }).join(t("sep_clause")) + mark("remove") + "</p>" : "") +
+      var fs = state("flow:" + fw.id), fc = base && changed(fs), fOld = fc && (X.old || {})["flow:" + fw.id];
+      return '<div class="flow" id="flow-' + h(fw.id) + '"><div class="flow-h' + (fc ? " is-chg chg-" + fs : "") + '"><h3>' + h(fw.name) + mark(fs) + "</h3>" +
+        (fw.summary ? "<p>" + h(fw.summary) + "</p>" : "") +
+        (fOld && fOld.summary != null ? '<span class="was"><b>' + h(t("was")) + "</b><s>" + h(fOld.summary) + "</s></span>" : "") +
+        "</div>" + '<p class="flow-hint">' + h(t("flow_scroll_hint")) + "</p>" + flowDiagram(fw) +
+        /* Each removed step is a change of its own, so each is a stop for the change arrows. */
+        (gone.length && base ? '<p class="flow-gone">' + h(t("flow_removed")) + gone.map(function (s) { return '<s class="is-chg chg-remove">' + h(s.text) + "</s>"; }).join(t("sep_clause")) + mark("remove") + "</p>" : "") +
         "</div>";
     }).join("") + "</div>";
     var flowChanged = Object.keys(X.items || {}).some(function (k) { return k.indexOf("step:") === 0 || k.indexOf("flow:") === 0; }) ||
@@ -858,7 +892,13 @@ tr.ln.is-chg::before { display: none; }
       return '<a class="oq' + (q.priority === "P0" ? " p0" : "") + '" href="#q-' + h(q.id) + '"><span class="pri ' + h(q.priority) + '">' + h(q.priority) + "</span>" +
         "<span><b class=\"mono\">" + h(q.id) + "</b> " + h(q.title) + '</span><span class="go">' + h(t("open_go")) + " →</span></a>";
     }).join("") + "</div>" : "";
-    return '<article class="card' + (cardChg ? " is-chg chg-" + s : "") + '"' + attrs + ">" + head + '<p class="sum">' + h(f.summary) + "</p>" + banners +
+    /* A changed name or summary is one change: mark the summary line, with what it said before. */
+    var before = base && (X.old || {})["feature:" + f.id];
+    var sum = before ? '<p class="sum ln is-chg chg-modify" data-delta="1"><span>' + h(f.summary) + "</span>" +
+      (before.name != null ? '<span class="was"><b>' + h(t("was")) + "</b><s>" + h(before.name) + "</s></span>" : "") +
+      (before.summary != null ? '<span class="was"><b>' + h(t("was")) + "</b><s>" + h(before.summary) + "</s></span>" : "") + "</p>" :
+      '<p class="sum">' + h(f.summary) + "</p>";
+    return '<article class="card' + (cardChg ? " is-chg chg-" + s : "") + '"' + attrs + ">" + head + sum + banners +
       '<div class="part"><div class="part-h">' + h(t("part_rules")) + '</div><ul class="rules">' + rules.map(ruleRow).join("") + "</ul></div>" +
       exHtml + duo + open + "</article>";
   }
@@ -1001,6 +1041,15 @@ tr.ln.is-chg::before { display: none; }
     window.addEventListener("resize", drawFlows);
   }
   if (document.fonts && document.fonts.ready) document.fonts.ready.then(drawFlows);
+
+  /* ---------- comparison switch: reload with ?vs=, keeping the rest of the link ---------- */
+  $$("[data-vs]").forEach(function (b) {
+    b.addEventListener("click", function () {
+      if (b.dataset.vs === VS) return;
+      var rest = location.search.replace(/^\?/, "").split("&").filter(function (p) { return p && p.indexOf("vs=") !== 0; });
+      location.search = "?" + rest.concat("vs=" + b.dataset.vs).join("&");
+    });
+  });
 
   /* ---------- client filter ---------- */
   var clientCss = document.createElement("style");

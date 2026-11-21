@@ -163,6 +163,12 @@ code { font-family: var(--mono); font-size: .88em; background: var(--sunk); bord
 a.st:hover { text-decoration: none; border-color: var(--ink-3); }
 .st-l { font-size: 12.5px; color: var(--ink-3); }
 .st-v { font-size: 19px; font-weight: 700; line-height: 1.4; }
+.st a.st-v { color: var(--ink); justify-self: start; }
+.st.chg a.st-v { color: var(--mod); }
+.st a.st-v:hover { text-decoration: underline; text-underline-offset: 4px; }
+.seg.vs { justify-self: start; padding: 2px; border-radius: 8px; margin: -3px 0 1px -2px; }
+.seg.vs button { padding: 2px 9px; font-size: 12px; border-radius: 6px; }
+.kicker .latest { color: var(--ink-3); }
 .st-s { font-size: 13px; color: var(--ink-2); line-height: 1.6; }
 .st.go { background: var(--add-bg); border-color: transparent; } .st.go .st-v { color: var(--add); }
 .st.wait { background: var(--k-ask-bg); border-color: transparent; } .st.wait .st-v { color: var(--k-ask); }
@@ -373,6 +379,34 @@ tr.ln.is-chg::before { display: none; }
 (function () {
   "use strict";
   var D = JSON.parse(document.getElementById("req-data").textContent);
+  /* A working copy carries change marks for each comparison it offers (D.diffs: "send" = what readers
+     see, "prev" = since the version before); ?vs= picks one, otherwise D.vs. Sent copies have only D.diff. */
+  var VS = null;
+  if (D.diffs) {
+    var askedVs = (location.search.match(/[?&]vs=(send|prev)(?:&|$)/) || [])[1];
+    VS = askedVs && D.diffs.hasOwnProperty(askedVs) ? askedVs : D.vs;
+    D.diff = D.diffs[VS];
+    if (D.view_clients) D.clients = D.view_clients[VS];
+  }
+  /* The change tile's label; a working copy offering two comparisons shows the switch instead,
+     each button's tooltip naming the exact copy or version. */
+  function vsLabel(label) {
+    var keys = D.diffs ? Object.keys(D.diffs) : [];
+    if (keys.length < 2) return '<span class="st-l">' + h(label) + "</span>";
+    return '<span class="seg vs" role="group" aria-label="' + h(t("vs_label")) + '">' + keys.map(function (k) {
+      var b = D.diffs[k] && D.diffs[k].base;
+      var tip = !b ? t("vs_first") : b.kind === "send" ? t("base_send", { n: b.no, date: b.date }) : t("base_version", { v: b.v });
+      return '<button type="button" data-vs="' + k + '" aria-pressed="' + (k === VS) + '" title="' + h(tip) + '">' +
+        h(t(k === "send" ? "vs_send" : "vs_prev")) + "</button>";
+    }).join("") + "</span>";
+  }
+  /* Switching reloads with ?vs=, keeping the rest of the link (a picked client, say). */
+  document.addEventListener("click", function (e) {
+    var b = e.target.closest && e.target.closest("[data-vs]");
+    if (!b || b.dataset.vs === VS) return;
+    var rest = location.search.replace(/^\?/, "").split("&").filter(function (p) { return p && p.indexOf("vs=") !== 0; });
+    location.search = "?" + rest.concat("vs=" + b.dataset.vs).join("&");
+  });
   var A = D.analysis, T = D.t, M = D.meta, X = D.diff || { items: {} };
   var KEY = "req-release:" + M.id;
 
@@ -555,8 +589,10 @@ tr.ln.is-chg::before { display: none; }
     var c3 = '<a class="st" href="#before"><span class="st-l">' + h(t("c_prog_l", { env: env })) + '</span><span class="st-v">' + h(t("c_prog_v", p)) + "</span>" +
       '<span class="prog" aria-hidden="true">' + (p.done ? '<i class="done" style="width:' + (p.done / (p.n || 1) * 100) + '%"></i>' : "") + '</span><span class="st-s">' + h(t("c_prog_s")) + "</span></a>";
     var c4 = base ?
-      '<a class="st chg" href="#changes" id="c-chg"><span class="st-l">' + h(t("c_chg_l", baseVars)) + '</span><span class="st-v">' + h(t("c_chg_v", { n: X.total })) + '</span><span class="st-s">' + h(t("c_chg_s")) + "</span></a>" :
-      '<div class="st"><span class="st-l">' + h(t("tb_send")) + '</span><span class="st-v">' + h(t("c_draft")) + '</span><span class="st-s">' + h(t("c_draft_s")) + "</span></div>";
+      '<div class="st' + (X.total ? " chg" : "") + '">' + vsLabel(t("c_chg_l", baseVars)) + '<a class="st-v" href="#changes" id="c-chg">' +
+        h(X.total ? t("c_chg_v", { n: X.total }) : t("c_chg_none")) + '</a><span class="st-s">' + h(X.total ? t("c_chg_s") : "") + "</span></div>" :
+      '<div class="st">' + vsLabel(t("tb_send")) + '<span class="st-v">' + h(t(M.send ? "vs_first" : "c_draft")) + '</span><span class="st-s">' +
+        h(t(M.send ? "c_first_s" : "c_draft_s")) + "</span></div>";
     // Handing the environment to an AI that has tools to act is the first way offered; ticking by hand stays below.
     var ai = list.length ? '<div class="handoff" id="handoff"><h2>' + h(t("ai_h")) + "</h2><p>" + h(t("ai_p", { env: env })) + '</p><div class="handoff-q"><q>' +
       h(t("ai_text", { title: A.meta.title, id: M.id, env: env })) + '</q><button type="button" class="btn primary" data-copy>' + h(t("copy")) + "</button></div></div>" : "";
@@ -566,7 +602,8 @@ tr.ln.is-chg::before { display: none; }
         (D.brief_file ? '<a href="' + briefLink("q-", q.id) + '">' + h(t("to_brief")) + "</a>" : "") + "</span></li>";
     }).join("") + "</ul></div>" : "";
     return '<header class="cover wrap" id="cover"><div class="cover-top"><div>' +
-      '<div class="kicker">' + h(M.send ? t("kicker", { n: M.send.no, date: M.send.date }) : t("kicker_draft")) + "</div>" +
+      '<div class="kicker">' + (M.send ? h(t("kicker", { n: M.send.no, date: M.send.date })) + ' <span class="latest">' + h(t("kicker_latest")) + "</span>" :
+        h(t("kicker_draft"))) + "</div>" +
       "<h1>" + h(A.meta.title) + '</h1><p class="lead">' + lead + "</p></div>" +
       '<dl class="tblock">' + tb + "</dl></div>" +
       '<div class="status">' + c1 + sqlCard(env) + c3 + c4 + "</div>" + ai + hold + "</header>";

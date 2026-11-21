@@ -12,6 +12,7 @@ The result is what the page templates read:
 
     {"items": {"feature:C04": "modify", "step:P1:s7": "add", …},
      "lists": {"feature:C04:rules": [{"s": "modify", "item": …, "old": …}, …], …},
+     "old": {"feature:C04": {"summary": "the summary before"}, …},   # changed names and summaries
      "removed_steps": {"P1": [step, …]},
      "total": 28, "add": 13, "modify": 12, "remove": 3,
      "new_changes": 9}        # change notes added since the old version
@@ -82,6 +83,7 @@ def _by_id(items: Any, key: str = "id") -> dict[str, dict[str, Any]]:
 def compare(old: dict[str, Any], new: dict[str, Any]) -> dict[str, Any]:
     items: dict[str, str] = {}
     lists: dict[str, list[dict[str, Any]]] = {}
+    olds: dict[str, dict[str, Any]] = {}
     removed_steps: dict[str, list[dict[str, Any]]] = {}
     count = {"add": 0, "modify": 0, "remove": 0}
 
@@ -110,6 +112,7 @@ def compare(old: dict[str, Any], new: dict[str, Any]) -> dict[str, Any]:
             if (f.get("name"), f.get("summary")) != (before.get("name"), before.get("summary")):
                 count["modify"] += 1
                 changed = True
+                olds[key] = {k: before.get(k) for k in ("name", "summary") if before.get(k) != f.get(k)}
             for part in FEATURE_LISTS:
                 changed = note("%s:%s" % (key, part), list_diff(before.get(part), f.get(part))) or changed
             if changed:
@@ -131,6 +134,7 @@ def compare(old: dict[str, Any], new: dict[str, Any]) -> dict[str, Any]:
             continue
         if (fw.get("name"), fw.get("summary")) != (before.get("name"), before.get("summary")):
             hit("flow:%s" % fw.get("id"), "modify")
+            olds["flow:%s" % fw.get("id")] = {k: before.get(k) for k in ("name", "summary") if before.get(k) != fw.get(k)}
         old_steps = _by_id(before.get("steps"))
         new_ids = set()
         for s in fw.get("steps") or []:
@@ -152,6 +156,7 @@ def compare(old: dict[str, Any], new: dict[str, Any]) -> dict[str, Any]:
     return {
         "items": items,
         "lists": lists,
+        "old": olds,
         "removed_steps": removed_steps,
         "total": sum(count.values()),
         **count,
@@ -251,6 +256,7 @@ def compare_backend(old: dict[str, Any], new: dict[str, Any]) -> dict[str, Any]:
     items: dict[str, str] = {}
     lists: dict[str, list[dict[str, Any]]] = {}
     olds: dict[str, dict[str, Any]] = {}
+    heads: list[str] = []  # APIs whose own fields changed, not only their todo / online lines
     count = {"add": 0, "modify": 0, "remove": 0}
     ob, nb = old.get("backend") or {}, new.get("backend") or {}
 
@@ -282,6 +288,7 @@ def compare_backend(old: dict[str, Any], new: dict[str, Any]) -> dict[str, Any]:
             if any(_dump(before.get(f)) != _dump(x.get(f)) for f in API_FIELDS):
                 count["modify"] += 1
                 changed = True
+                heads.append(key)
                 was = {f: before[f] for f in ("does", "where", "now") if before.get(f) and before.get(f) != x.get(f)}
                 if was:
                     olds[key] = was
@@ -324,6 +331,7 @@ def compare_backend(old: dict[str, Any], new: dict[str, Any]) -> dict[str, Any]:
         "items": items,
         "lists": lists,
         "old": olds,
+        "heads": heads,
         "total": sum(count.values()),
         **count,
         "new_changes": len(backend_notes(new, new_notes(old, new))),
