@@ -86,11 +86,12 @@ def page_list(texts: dict[str, Any], shown: list[str], linked: set[str], current
     return out
 
 
-def _meta(state: dict[str, Any], version: int, generated: str) -> dict[str, Any]:
-    """Header facts every page shows; doc_v is the document version this analysis version follows."""
+def _meta(state: dict[str, Any], version: int, generated: str, send: dict[str, Any] | None = None) -> dict[str, Any]:
+    """Header facts every page shows. doc_v is the document version this analysis version follows;
+    `send` ({"no", "date"}) is the send this copy belongs to, None for a copy not sent as it is."""
     doc_v = next((v.get("doc_v") for v in state.get("versions") or [] if v["v"] == version), None)
     return {"id": state["id"], "analysis_v": version, "doc_v": doc_v or len(state["docs"]), "generated": generated,
-            "send": None}
+            "send": send}
 
 
 def _fill(page: str, analysis: dict[str, Any], lang: str, texts: dict[str, Any], data: dict[str, Any]) -> str:
@@ -113,13 +114,14 @@ def brief_html(
     base: dict[str, Any] | None = None,
     base_analysis: dict[str, Any] | None = None,
     pages: list[dict[str, Any]] | None = None,
+    send: dict[str, Any] | None = None,
 ) -> str:
     shown = {k: v for k, v in analysis.items() if k != "skipped_sections"}  # skipped sections are never shown
     cited = set(SECTION_REF.findall(json.dumps(shown, ensure_ascii=False)))
     data = {
         "lang": state["lang"],
         "t": texts["brief"],
-        "meta": _meta(state, version, generated),
+        "meta": _meta(state, version, generated, send),
         "pages": pages or [],
         "analysis": analysis,
         "sections": section_texts(doc_text, cited),
@@ -140,6 +142,7 @@ def plan_html(
     base: dict[str, Any] | None = None,
     base_analysis: dict[str, Any] | None = None,
     pages: list[dict[str, Any]] | None = None,
+    send: dict[str, Any] | None = None,
 ) -> str:
     """The backend plan: build order, who does what, each task, tables, data, config, risks.
 
@@ -149,7 +152,7 @@ def plan_html(
     data = {
         "lang": state["lang"],
         "t": texts["plan"],
-        "meta": _meta(state, version, generated),
+        "meta": _meta(state, version, generated, send),
         "pages": pages or [],
         "brief_file": brief[0] if brief else None,
         "analysis": {k: analysis.get(k) for k in PLAN_PARTS},
@@ -262,6 +265,7 @@ def frontend_html(
     base_frontend: dict[str, Any] | None = None,
     base_spec: dict[str, Any] | None = None,
     pages: list[dict[str, Any]] | None = None,
+    send: dict[str, Any] | None = None,
 ) -> str:
     """The frontend API guide: per client, pages, APIs with fields from the API description, display rules."""
     t = texts["frontend"]
@@ -273,7 +277,7 @@ def frontend_html(
     data = {
         "lang": state["lang"],
         "t": t,
-        "meta": dict(_meta(state, version, generated), contract_v=contract_v),
+        "meta": dict(_meta(state, version, generated, send), contract_v=contract_v),
         "pages": pages or [],
         "brief_file": brief[0] if brief else None,
         "title": (analysis.get("meta") or {}).get("title", ""),
@@ -309,6 +313,7 @@ def release_html(
     base: dict[str, Any] | None = None,
     base_analysis: dict[str, Any] | None = None,
     pages: list[dict[str, Any]] | None = None,
+    send: dict[str, Any] | None = None,
 ) -> str:
     """The release checklist: steps by stage for the environment picked on the page.
 
@@ -318,7 +323,7 @@ def release_html(
     data = {
         "lang": state["lang"],
         "t": texts["release"],
-        "meta": _meta(state, version, generated),
+        "meta": _meta(state, version, generated, send),
         "pages": pages or [],
         "brief_file": brief[0] if brief else None,
         "envs": [{"name": e, "applied": v} for e, v in envs],
@@ -365,3 +370,74 @@ def write_page(folder: Path, name: str, content: str, state: dict[str, Any], ver
     outputs[name] = {"sha256": digest, "v": version}
     result["status"] = "written"
     return result, []
+
+
+class Job:
+    """One requirement at one saved version: everything its pages are generated from.
+
+    `render` writes the working copies in out/ from it, `send` the copies it
+    sends; only what the change marks compare with (`base`) and the send a copy
+    belongs to differ.
+    """
+
+    def __init__(self, folder: Path, state: dict[str, Any], envs: list[str], analysis: dict[str, Any],
+                 frontend: dict[str, Any] | None, spec: dict[str, Any] | None, contract_v: int | None,
+                 entry: dict[str, Any], doc_text: str, load_version: Any, load_contract: Any) -> None:
+        self.folder, self.state, self.envs = folder, state, envs
+        self.analysis, self.frontend, self.spec, self.contract_v = analysis, frontend, spec, contract_v
+        self.entry, self.doc_text = entry, doc_text
+        self.load_version, self.load_contract = load_version, load_contract
+        self.texts = load_texts(state["lang"])
+        self.generated = entry["at"].replace("T", " ")[:16]
+        # One SQL file per database; pages link to the first.
+        self.sql_files = sql.file_names(analysis, self.texts["files"]["sql"])
+        self.names = {p: self.texts["files"][p] for p in PAGES}
+        if self.sql_files:
+            self.names["sql"] = next(iter(self.sql_files.values()))
+
+    def file_names(self, page: str) -> list[str]:
+        """Every file a page has: one, or one SQL file per database."""
+        return list(self.sql_files.values()) if page == "sql" else [self.names[page]]
+
+    def base_drafts(self, v: int) -> tuple[dict[str, Any], dict[str, Any] | None, dict[str, Any] | None]:
+        """The analysis, frontend.json and API description saved with version `v`."""
+        at = next(x for x in self.state["versions"] if x["v"] == v)
+        frontend = None
+        if at.get("frontend") and (self.folder / at["frontend"]).is_file():
+            frontend = json.loads((self.folder / at["frontend"]).read_text(encoding="utf-8-sig"))
+        spec = self.load_contract(at["contract_v"]) if at.get("contract_v") else None
+        return self.load_version(v), frontend, spec
+
+    def frontend_marks(self, v: int) -> dict[str, str]:
+        """Change marks of the frontend guide against version `v`: {"api:C1": "modify", …}."""
+        base_analysis, base_frontend, base_spec = self.base_drafts(v)
+        return _frontend_clients(self.analysis, self.frontend or {}, self.spec, self.texts["frontend"],
+                                 base_analysis, base_frontend, base_spec)[1]["items"]
+
+    def contents(self, page: str, base: dict[str, Any] | None = None, send: dict[str, Any] | None = None,
+                 pages: list[dict[str, Any]] | None = None) -> list[tuple[str, str, dict[str, Any]]]:
+        """(file name, content, extra fields) for each file of a page.
+
+        `base` ({"kind": "send" or "version", "v": …}) is what change marks compare with; `send`
+        ({"no", "date"}) the send this copy belongs to.
+        """
+        a, s, v, t = self.analysis, self.state, self.entry["v"], self.texts
+        base_analysis = self.load_version(base["v"]) if base else None
+        if page == "brief":
+            return [(self.names[page], brief_html(a, s, v, self.generated, self.doc_text, t, base, base_analysis,
+                                                  pages, send), {})]
+        if page == "plan":
+            return [(self.names[page], plan_html(a, s, v, self.generated, t, base, base_analysis, pages, send), {})]
+        if page == "frontend":
+            base_frontend = base_spec = None
+            if base:
+                _, base_frontend, base_spec = self.base_drafts(base["v"])
+            return [(self.names[page], frontend_html(a, self.frontend, s, v, self.generated, t, self.spec,
+                                                     self.contract_v, base, base_analysis, base_frontend, base_spec,
+                                                     pages, send), {})]
+        if page == "release":
+            rows = sql.release_rows(a, s, self.envs, v, self.load_version, t, self.sql_files)
+            return [(self.names[page], release_html(a, s, v, self.generated, t, sql.env_rows(s, self.envs), rows,
+                                                    base, base_analysis, pages, send), {})]
+        return [(name, sql.build(a, db, v, self.generated, s["id"], s, self.envs, self.load_version, t), {"db": db})
+                for db, name in self.sql_files.items()]

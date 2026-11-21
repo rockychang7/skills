@@ -7,14 +7,16 @@ import datetime
 import json
 from pathlib import Path
 
+from . import diff as diffs
 from . import example as ex
 from . import openapi
 from . import render
+from . import sends
 from . import sql
 from .check import check_analysis, check_frontend
 from .doc import duplicate_ids, parse_sections, read_doc
 from .files import JsonProblem, read_json, write_text
-from .output import Stop, finish, issue, note, summarize
+from .output import BLOCKING, Stop, finish, issue, note, summarize
 from .settings import LANGS, Settings, guard_not_in_skill_folder, workspace_suggestions
 from .status import report
 from .steps import for_env
@@ -315,64 +317,173 @@ def cmd_render(args: argparse.Namespace) -> int:
     entry, created = _save_version(folder, state, analysis, analysis_path.read_text(encoding="utf-8-sig"), doc_v, frontend,
                                    (folder / "frontend.json").read_text(encoding="utf-8-sig") if frontend is not None else "",
                                    contract_v)
-    generated = entry["at"].replace("T", " ")[:16]
     wanted = list(args.only) if args.only else render.pages_needed(analysis, frontend is not None)
     if "frontend" in wanted and frontend is None:
         raise Stop(issue("frontend.missing", "error", "frontend.json has not been written yet.",
                          hint="Write it by references/frontend.md once the APIs exist in code.", where="--only"))
-    texts = render.load_texts(state["lang"])
+    job = _job(folder, state, settings, analysis, frontend, spec, contract_v, entry, doc_text)
     making = [p for p in wanted if p in render.READY]
     not_yet = [p for p in wanted if p not in render.READY]
-    # One SQL file per database; pages link to the first.
-    sql_files = sql.file_names(analysis, texts["files"]["sql"])
-    names = {p: texts["files"][p] for p in render.PAGES}
-    if sql_files:
-        names["sql"] = next(iter(sql_files.values()))
-    # Each page lists the requirement's pages: the ones it needs, plus any generated earlier.
-    exists = {p for p in render.PAGES if (folder / "out" / names[p]).is_file()}
-    needed = render.pages_needed(analysis, frontend is not None)
-    shown = [p for p in render.PAGES if p in needed or p in wanted or p in exists]
-    linked = exists | set(making)
-    files: list = []
-
-    def write(page: str, name: str, content: str, **extra: str) -> None:
-        result, page_issues = render.write_page(folder, name, content, state, entry["v"], args.force)
-        files.append(dict(result, page=page, **extra))
-        issues.extend(page_issues)
-
-    for page in making:
-        pages = render.page_list(texts, shown, linked, page, names)
-        if page == "brief":
-            write(page, names[page], render.brief_html(analysis, state, entry["v"], generated, doc_text, texts, base,
-                                                       base_analysis, pages))
-        elif page == "plan":
-            write(page, names[page], render.plan_html(analysis, state, entry["v"], generated, texts, base,
-                                                      base_analysis, pages))
-        elif page == "frontend":
-            base_frontend = base_spec = None
-            if base is not None:
-                at = [v for v in state["versions"] if v["v"] == args.since][0]
-                if at.get("frontend") and (folder / at["frontend"]).is_file():
-                    base_frontend = json.loads((folder / at["frontend"]).read_text(encoding="utf-8-sig"))
-                base_spec = _contract(folder, state, at["contract_v"])[0] if at.get("contract_v") else None
-            write(page, names[page], render.frontend_html(
-                analysis, frontend, state, entry["v"], generated, texts, spec, contract_v, base, base_analysis,
-                base_frontend, base_spec, pages))
-        elif page == "release":
-            rows = sql.release_rows(analysis, state, settings.envs(), entry["v"], load_version, texts, sql_files)
-            write(page, names[page], render.release_html(
-                analysis, state, entry["v"], generated, texts, sql.env_rows(state, settings.envs()), rows,
-                base, base_analysis, pages))
-        else:
-            for db, name in sql_files.items():
-                content = sql.build(analysis, db, entry["v"], generated, state["id"], state, settings.envs(),
-                                    load_version, texts)
-                write(page, name, content, db=db)
+    files, page_issues = _write_working(job, making, wanted, base, args.force)
+    issues += page_issues
     save_state(folder, state)
     if not_yet:
         note("Not generated yet (coming in later versions of this skill): %s." % ", ".join(not_yet))
     return finish("render", issues, limit=ISSUE_LIMIT, id=state["id"], rendered=True, version=entry["v"],
                   new_version=created, compared_with=base, files=files, not_yet=not_yet)
+
+
+def _job(folder: Path, state: dict, settings: Settings, analysis: dict, frontend: object, spec: object,
+         contract_v: object, entry: dict, doc_text: str) -> render.Job:
+    return render.Job(folder, state, settings.envs(), analysis, frontend, spec, contract_v, entry, doc_text,
+                      _version_loader(folder, state), lambda v: _contract(folder, state, v)[0])
+
+
+def _write_working(job: render.Job, making: list, wanted: list, base: object, force: bool) -> tuple[list, list]:
+    """Write the working copies of `making` into out/.
+
+    Change marks compare with `base` when given (render --since); otherwise with the copy of the
+    page last sent, or, when this version is the one last sent, the page looks like that copy.
+    """
+    folder, state, v = job.folder, job.state, job.entry["v"]
+    # Each page lists the requirement's pages: the ones it needs, plus any generated earlier.
+    exists = {p for p in render.PAGES if (folder / "out" / job.names[p]).is_file()}
+    needed = render.pages_needed(job.analysis, job.frontend is not None)
+    shown = [p for p in render.PAGES if p in needed or p in wanted or p in exists]
+    linked = exists | set(making)
+    files: list = []
+    issues: list = []
+    for page in making:
+        pages = render.page_list(job.texts, shown, linked, page, job.names)
+        page_base, send = (base, None) if base else sends.working_view(state.get("sends") or [], page, v)
+        for name, content, extra in job.contents(page, page_base, send, pages):
+            result, found = render.write_page(folder, name, content, state, v, force)
+            files.append(dict(result, page=page, compared_with=page_base, **extra))
+            issues += found
+    return files, issues
+
+
+UNEXPLAINED_LIMIT = 20
+
+
+def cmd_send(args: argparse.Namespace) -> int:
+    settings, folder, state = _requirement(args)
+    analysis = _read_source(folder / "analysis.json", "Write it first; see the format with: %s example" % RUN)
+    frontend = _frontend(folder, False)
+    spec, contract_v = _contract(folder, state)
+    versions = state.get("versions") or []
+    if not versions or versions[-1].get("sha256") != render.draft_fingerprint(analysis, frontend, contract_v):
+        return finish("send", [issue(
+            "send.not-rendered", "error",
+            "The drafts changed after the last render." if versions else "Nothing has been rendered yet.",
+            hint="Run check and render, and look at the pages: what is sent is the last rendered version.",
+            where="analysis.json")], id=state["id"], sent=False)
+    entry = versions[-1]
+    _, doc, issues = followed_doc(folder, state, analysis)
+    doc_text = doc.read_text(encoding="utf-8")
+    load_version = _version_loader(folder, state)
+
+    # 1. What check and render would refuse. Their warnings were seen at render.
+    found = check_analysis(analysis, {s.id for s in parse_sections(doc_text)}, settings.envs())
+    found += sql.problems(analysis, state, load_version)
+    if frontend is not None:
+        found += check_frontend(frontend, analysis) + render.contract_issues(frontend, spec)
+    issues += [i for i in found if i["level"] in BLOCKING]
+    # 2. Answers not applied: readers would get rules that ignore them.
+    decided = [q.get("id") for q in analysis.get("questions") or [] if isinstance(q, dict) and q.get("status") == "decided"]
+    if decided:
+        issues.append(issue("send.decided", "error", "Answered but not applied yet: %s." % ", ".join(decided),
+                            hint="Readers would get rules that ignore these answers. Apply each one (references/"
+                            "questions.md, \"When answers arrive\"), render, and send again.", where="questions"))
+
+    # 3. Which pages go.
+    needed = render.pages_needed(analysis, frontend is not None)
+    if args.files:
+        bad = [p for p in args.files if p not in needed]
+        if bad:
+            issues.append(issue("send.bad-files", "error", "This requirement has no %s to send." % ", ".join(bad),
+                                hint="It has: %s." % ", ".join(needed), where="--files"))
+        files = [p for p in render.PAGES if p in args.files and p in needed]
+    else:
+        files = [p for p in render.PAGES if p in sends.DEFAULT_FILES[args.to] and p in needed]
+        if args.to in ("frontend", "all") and frontend is None:
+            issues.append(issue("send.no-frontend-guide", "warn",
+                                "The frontend API guide is not part of this send: frontend.json has not been written.",
+                                hint="Once the APIs exist in code, write it (references/frontend.md), render, and send "
+                                "it to the frontend.", where="--to"))
+    job = _job(folder, state, settings, analysis, frontend, spec, contract_v, entry, doc_text)
+
+    # 4. Hand edits would not reach the copy that is sent.
+    outputs = state.get("outputs") or {}
+    for page in files:
+        for name in job.file_names(page):
+            path, record = folder / "out" / name, outputs.get(name)
+            if path.is_file() and record and render.file_hash(path.read_bytes()) != record.get("sha256"):
+                issues.append(issue("send.page-edited", "error", "%s was changed by hand after it was generated." % name,
+                                    hint="Ask the user whether the edits matter: copy what matters into analysis.json "
+                                    "and render, or render --force to drop them.", where="out/" + name))
+
+    # 5. Every change since the copy these readers last got is named by a change note.
+    all_sends = state.get("sends") or []
+    bases = {p: sends.base_send(all_sends, args.to, p) for p in files}
+    missing: list = []
+    for page, prev in bases.items():
+        if prev is None or prev["v"] == entry["v"]:
+            continue
+        base_analysis, base_frontend, _ = job.base_drafts(prev["v"])
+        notes = diffs.new_notes(base_analysis, analysis)
+        if page == "frontend":
+            notes += diffs.new_notes(base_frontend or {}, frontend or {})
+        changes = sends.page_changes(page, base_analysis, analysis, lambda v=prev["v"]: job.frontend_marks(v))
+        missing += [label for label in sends.unexplained(changes, notes) if label not in missing]
+    if missing:
+        listed = ", ".join(missing[:UNEXPLAINED_LIMIT]) + (
+            " and %d more" % (len(missing) - UNEXPLAINED_LIMIT) if len(missing) > UNEXPLAINED_LIMIT else "")
+        issues.append(issue(
+            "send.unexplained", "error",
+            "Changed since the copy these readers last received, but named by no change note: %s." % listed,
+            hint="Readers learn what changed from the notes. Add `changes` entries at the top (frontend guide: "
+            "frontend.json) in plain words, with refs naming each one; then check, render and send again.",
+            where="changes"))
+    if files and all(prev is not None and prev["v"] == entry["v"] for prev in bases.values()):
+        issues.append(issue("send.nothing-new", "warn",
+                            "These readers already received version %d of every page in this send." % entry["v"],
+                            hint="Sending again is fine if they lost the files; otherwise there is nothing new.",
+                            where="--to"))
+
+    no, at = len(all_sends) + 1, _now().isoformat()
+    pattern = job.texts["send"]["file"]
+    names = {p: [sends.copy_name(n, no, at, pattern) for n in job.file_names(p)] for p in files}
+    view = [{"page": p, "files": names[p], "compared_with": sends.base_meta(bases[p]) if bases[p] else None}
+            for p in files]
+    common = dict(id=state["id"], to=args.to, no=no, version=entry["v"])
+    if any(i["level"] in BLOCKING for i in issues):
+        return finish("send", issues, limit=None if args.all else ISSUE_LIMIT, sent=False, files=view, **common)
+    if args.preview:
+        note("Preview only: nothing was recorded or written.")
+        return finish("send", issues, sent=False, preview=True, files=view, **common)
+
+    # Write the copies that are sent, record the send, then bring the working copies in line.
+    record = {"no": no, "to": args.to, "files": files, "v": entry["v"], "at": at, "copies": []}
+    belongs = {"no": no, "date": sends.short_date(at)}
+    rail = {p: names[p][0] for p in files}
+    for item in view:
+        page, prev = item["page"], bases[item["page"]]
+        pages = render.page_list(job.texts, files, set(files), page, rail)
+        for (_, content, extra), name in zip(job.contents(page, item["compared_with"], belongs, pages), names[page]):
+            write_text(folder / "sent" / name, content)
+            record["copies"].append(dict({"page": page, "file": "sent/" + name, "base": prev["no"] if prev else None,
+                                          "sha256": render.file_hash(content.encode("utf-8"))}, **extra))
+    state.setdefault("sends", []).append(record)
+    working, page_issues = _write_working(job, files, needed, None, False)
+    issues += page_issues
+    save_state(folder, state)
+    for item in view:
+        item["files"] = [str(folder / "sent" / n) for n in item["files"]]
+    return finish("send", issues, sent=True, files=view, working=working, **common, next=[
+        "Hand the files over with the tools this session has (a chat or file-sharing skill), after the user says "
+        "where and to whom; with no such tool, give the user the file paths.",
+    ])
 
 
 CITED_LIMIT = 15  # citations listed per changed section
@@ -584,6 +695,7 @@ HANDLERS = {
     "steps": cmd_steps,
     "contract": cmd_contract,
     "refresh": cmd_refresh,
+    "send": cmd_send,
     "status": cmd_status,
     "example": cmd_example,
 }

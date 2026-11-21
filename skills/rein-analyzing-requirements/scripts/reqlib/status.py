@@ -9,7 +9,10 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any, Callable
 
-from . import render, sql
+import json
+
+from . import diff as diffs
+from . import render, sends, sql
 from .check import check_analysis
 from .output import issue, summarize
 
@@ -43,6 +46,48 @@ def _pages(folder: Path, state: dict[str, Any], analysis: dict[str, Any], latest
             how = "current"
         rows.append({"page": page, "file": str(path), "state": how, "v": record.get("v")})
     return rows
+
+
+def _frontend_at(folder: Path, version: dict[str, Any]) -> Any:
+    path = folder / version["frontend"] if version.get("frontend") else None
+    return json.loads(path.read_text(encoding="utf-8-sig")) if path and path.is_file() else None
+
+
+def _sends(folder: Path, state: dict[str, Any], analysis: dict[str, Any], has_frontend: bool,
+           last: dict[str, Any] | None, load_version: Callable[[int], dict[str, Any]]) -> tuple[list, list]:
+    """The sends so far, and per reader group the changes since the copies it last received."""
+    all_sends = state.get("sends") or []
+    listed = [{"no": s["no"], "to": s["to"], "v": s["v"], "date": sends.short_date(s["at"]), "files": s["files"]}
+              for s in all_sends]
+    if not last or not all_sends:
+        return listed, []
+    by_v = {x["v"]: x for x in state.get("versions") or []}
+    latest = load_version(last["v"])
+    found = []
+    for group in sends.GROUPS:
+        behind = []
+        for page in render.pages_needed(analysis, has_frontend):
+            got = sends.last_copy(all_sends, group, page)
+            if got is None or got["v"] == last["v"]:
+                continue
+            old = load_version(got["v"])
+            if page == "frontend":
+                moved = _frontend_at(folder, by_v.get(got["v"], {})) != _frontend_at(folder, last) or \
+                    by_v.get(got["v"], {}).get("contract_v") != last.get("contract_v")
+            else:
+                moved = bool(sends.page_changes(page, old, latest)) or bool(diffs.new_notes(old, latest))
+            if moved:
+                behind.append((page, got))
+        if behind:
+            oldest = min((got for _, got in behind), key=lambda s: (s["v"], s["no"]))
+            found.append(issue(
+                "status.unsent", "warn",
+                "The %s team has changes it has not received: %s. Its copies are from send %d (%s, version %d); "
+                "the latest version is %d." % (group, ", ".join(p for p, _ in behind), oldest["no"],
+                                               sends.short_date(oldest["at"]), oldest["v"], last["v"]),
+                hint="When the user wants to send them: `send --req %s --to %s --preview`, then send."
+                % (state.get("name", ""), group), where="sends"))
+    return listed, found
 
 
 def report(
@@ -138,6 +183,8 @@ def report(
                         % (env, env, ran, last["v"]), where="applied.%s" % env))
             environments.append({"env": env, "ran": ran, "to_run": to_run})
     fields["environments"] = environments
+    fields["sends"], unsent = _sends(folder, state, analysis, frontend is not None, last, load_version)
+    issues += unsent
 
     found = [i for i in source_issues or [] if i["level"] != "warn"]  # being behind is reported above
     found += check_analysis(analysis, sections, envs) + sql.problems(analysis, state, load_version)

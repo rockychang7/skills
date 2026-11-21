@@ -1,10 +1,13 @@
 """Requirement folders inside the requirements folder (the workspace).
 
     <workspace>/REQ-20261118-activity-signup/
-      state.json         language, document versions (more as commands grow)
+      state.json         language, document and analysis versions, sends, what each environment ran
       source/doc-v1.md   each version of the document, as read
       analysis.json      written by the agent
       frontend.json      written by the agent
+      versions/          each saved analysis version
+      out/               the working copies of the pages (render)
+      sent/              the copies that were sent, named by send number and date (send)
 """
 
 from __future__ import annotations

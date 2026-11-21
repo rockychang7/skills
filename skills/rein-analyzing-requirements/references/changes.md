@@ -1,9 +1,20 @@
 # When the requirement changes
 
+## Contents
+
+- [The document changed](#the-document-changed): `refresh`, the impact list, taking a new version in
+- [Sending the files](#sending-the-files): `send`, its checks, the copies that go out
+
 The analysis follows one stored version of the document (`meta.source_v`).
 Every `src` names a section of that version, and the pages show its text. A
 newer document changes nothing until you take it in, and you take it in only
 after the user agreed to what it does to the analysis.
+
+Readers care about one thing: what changed since the copy they have. `send`
+records who got which copy, and every later copy marks the changes since
+then. Change notes (`changes`) are how they read those changes, so write one
+with every change, in plain words, starting with the ID, with `refs` naming
+everything it touches. Owners and status are progress and need none.
 
 ## The document changed
 
@@ -70,3 +81,42 @@ The product owner sends a new version: a file, a link, or pasted text.
 Rendering before the analysis takes the new version in is allowed (to record
 an answer, say): pages stay on the version the analysis follows, and
 `status` keeps reporting the newer document until `meta.source_v` is raised.
+
+## Sending the files
+
+Readers are `frontend`, `backend`, or `all` (both). Each gets, of the pages
+the requirement has:
+
+| `--to` | Pages |
+| --- | --- |
+| `frontend` | brief, frontend API guide |
+| `backend` | brief, backend plan, SQL, release checklist |
+| `all` | all of them |
+
+Use `--files` when the user names the pages. "Send it to the group" with no
+team named: ask which.
+
+1. **Preview.** `req.py send --req <name> --to <reader> --preview`. It
+   records nothing. Fix what it reports, then preview again:
+
+   | Code | What to do |
+   | --- | --- |
+   | `send.not-rendered` | `check`, `render`, and look at the pages: the last rendered version is what goes |
+   | `send.decided` | Apply those answers (the questions reference, "When answers arrive") |
+   | `send.unexplained` | For each change listed, add a `changes` entry (frontend guide: `frontend.json`) whose `refs` name it; `check`, `render` |
+   | `send.page-edited` | Ask whether the hand edits matter: copy them into `analysis.json` and render, or `render --force` |
+   | `send.no-frontend-guide` (warn) | Tell the user the frontend guide is not in this send |
+   | `send.nothing-new` (warn) | Tell the user these readers already have this version; send only if they want |
+   | `source.behind` (warn) | A newer document is not taken in yet: tell the user before sending |
+   | anything from `check` | Fix it as `check` says |
+
+2. **Ask.** Tell the user who gets which files, what each one compares with
+   (`compared_with`: send N and its date, or first time), and the open P0
+   questions. Wait for a yes.
+3. **Send.** The same command without `--preview`. It saves the copies in
+   `sent/` (names carry the send number and date), records the send, and
+   updates the pages in `out/` to match.
+4. **Hand them over.** The script posts nothing. With a tool that can (a chat
+   or file-sharing skill), send only after the user says where and to whom;
+   otherwise give the user the file paths.
+

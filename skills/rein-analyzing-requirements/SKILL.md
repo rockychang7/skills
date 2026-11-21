@@ -57,7 +57,7 @@ from the project directory so that it finds the project settings.
 | An environment's tables now have the changes ("test has it", or you just applied them) | `applied --env <env> --v <version>`, then `render`. The version is on the first line of the SQL file used; if the user does not know which file, ask: a wrong version gives that environment the wrong statements |
 | The APIs exist in code and the user wants the frontend guide | Write `frontend.json` by `references/frontend.md`; store the API description with `contract --req <name> --openapi <file or URL>` (again whenever the APIs change); `check --frontend`; `render` |
 | The document changed: a new file, link or pasted text | `references/changes.md`, "The document changed" |
-| Send the files | Not available in this version: tell the user. A copy written by hand would drift from the analysis |
+| The files go to a team ("发给前端"), or the user asks what a team has not received yet | `references/changes.md`, "Sending the files" |
 
 ## New requirement
 
@@ -114,6 +114,9 @@ from the project directory so that it finds the project settings.
 - **`refresh` reports `refresh.impact`.** Tell the user what the new
   document changes and what that affects (`references/changes.md`), and wait
   for a go-ahead before changing the analysis.
+- **Before `send`.** Once `send --preview` passes, tell the user who gets
+  which files and what each compares with, and wait for a yes. Post or upload
+  nothing without being told where.
 - **`render` reports `render.kept-manual`.** Someone edited the page by hand.
   Ask whether those edits matter: copy what matters into `analysis.json` and
   render again, or render with `--force` to replace the page.

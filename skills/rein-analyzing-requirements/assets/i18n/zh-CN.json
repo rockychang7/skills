@@ -13,6 +13,9 @@
     "release": "上线清单",
     "frontend": "前端接口对接"
   },
+  "send": {
+    "file": "-第{n}次-{date}"
+  },
   "brief": {
     "doc_kind": "需求导读",
     "toc": "目录",

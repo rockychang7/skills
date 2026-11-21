@@ -13,6 +13,9 @@
     "release": "Release checklist",
     "frontend": "Frontend API guide"
   },
+  "send": {
+    "file": "-send{n}-{date}"
+  },
   "brief": {
     "doc_kind": "Requirement brief",
     "toc": "Contents",

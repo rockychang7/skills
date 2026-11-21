@@ -14,10 +14,10 @@ from typing import Callable, Sequence
 from . import SKILL_NAME, __version__
 from .commands import HANDLERS
 from .output import Stop, finish, issue, use_utf8_streams
+from .sends import DEFAULT_FILES, TARGETS
 from .settings import LANGS
 
 OUTPUTS = ("brief", "plan", "sql", "release", "frontend")
-SEND_TARGETS = ("frontend", "self", "all")
 CONFIG_KEYS = ("workspace", "lang")
 CONFIG_SCOPES = ("project", "user")
 
@@ -295,14 +295,28 @@ def build_parser() -> argparse.ArgumentParser:
     p = _add_command(
         sub,
         "send",
-        "record a send and print a team notice",
-        "Run the strict pre-send check, record that the files were sent, and\n"
-        "print a notice ready to paste into the team chat. Pages compare against\n"
-        "the version this reader last received.",
-        ["send --req activity-signup --to frontend"],
+        "check the pages strictly and record that they were sent",
+        "Run the pre-send checks, then save the copies to send in sent/ (file names\n"
+        "carry the send number and date) and record the send. Each page compares\n"
+        "with the copy these readers last received, so they see every change since.\n"
+        "Blocks when: the drafts changed after the last render, check would fail,\n"
+        "answered questions are not applied, a page was edited by hand, or a change\n"
+        "since the readers' last copy is named by no change note.\n"
+        "Pages per reader by default (those the requirement has):\n"
+        "%s\n"
+        "Sends nothing anywhere itself: hand the files over afterwards." % "\n".join(
+            "  %-9s %s" % (k, ", ".join(v)) for k, v in DEFAULT_FILES.items()),
+        [
+            "send --req activity-signup --to frontend --preview",
+            "send --req activity-signup --to frontend",
+            "send --req activity-signup --to backend --files plan,sql",
+        ],
     )
     _add_req_options(p)
-    p.add_argument("--to", required=True, choices=SEND_TARGETS, help="who receives the files")
+    p.add_argument("--to", required=True, choices=TARGETS, help="who receives the files; all = frontend and backend")
+    p.add_argument("--files", type=_csv_of(OUTPUTS), metavar="LIST",
+                   help="send these pages instead of the reader's default, comma-separated: %s" % ",".join(OUTPUTS))
+    p.add_argument("--preview", action="store_true", help="run the checks and list what would be sent; record nothing")
     _add_all_option(p)
 
     p = _add_command(
