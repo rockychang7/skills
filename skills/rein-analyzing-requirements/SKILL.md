@@ -1,6 +1,6 @@
 ---
 name: rein-analyzing-requirements
-description: "Turns a product requirement document (PRD) into the files a team builds from: an analysis checked against the code, then a generated requirement brief, backend plan, table SQL, release checklist and frontend API guide. Use when the user asks to analyze a requirement or PRD (分析需求), says it changed (需求改了), answers its open questions, wants the frontend API guide, is about to send the files, or prepares a release, even when they only paste a document link or a few lines of requirement text. Not for summarizing or translating a document, writing the code, fixing a bug, or deciding what an agent builds under rein (rein-defining-requirements); when the project has its own requirement skill, use that one."
+description: "Turns a product requirement document (PRD) into the files a team builds from: an analysis checked against the code, then a generated requirement brief, backend plan, table SQL, release checklist and frontend API guide. Use when the user asks to analyze a requirement or PRD, says it changed, answers its open questions, wants the frontend API guide, is about to send the files, or prepares a release, even when they only paste a document link or a few lines of requirement text. Not for summarizing or translating a document, writing the code, fixing a bug, or deciding what an agent builds under rein (rein-defining-requirements); when the project has its own requirement skill, use that one."
 license: MIT
 compatibility: "Requires Python 3.9+ (standard library only) to run scripts/req.py."
 metadata:
@@ -14,6 +14,9 @@ Read a product requirement document, check it against the code, and write one
 analysis (`analysis.json`). Every page a person reads is generated from it by
 the script, so the pages never contradict each other. Edit only the analysis;
 never write a page or SQL by hand.
+
+Talk to the user in the language they write in, from the first question on;
+this file being in English is no reason to switch.
 
 ## Done when
 
@@ -143,7 +146,7 @@ from the project directory so that it finds the project settings.
 | Designing fields or class names in `backend.apis` | Not at analysis time. Say where it is called, what it does now, what to do, what to watch in production, in business words |
 | A `modify` API whose route you cannot find | Search again (`references/facts.md`). Truly missing: it is `new`. Unsure: write a question |
 | Deleting, splitting or renumbering an item after a render | IDs never change: keep the item with `removed` and a reason; a split-off part takes a new ID |
-| Writing the analysis in English because this skill is in English | Write what people read in `lang` from `new`; code names stay as they are |
+| Writing the analysis, or talking to the user, in English because this skill is in English | Talk in the user's language. Write what people read in `lang` from `new`; code names stay as they are |
 | Changing a table after some environment ran its SQL | Keep `sql` the full latest statement and append the change to `patches`; never edit an old patch. Otherwise that environment cannot catch up (`sql.patch-missing`) |
 | A page looks wrong, or SQL is needed | Edit `analysis.json` and render again; never edit generated files |
 
