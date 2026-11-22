@@ -1,0 +1,7 @@
+# Large raw logs stay on this computer
+**/evidence/raw/
+# System and editor clutter
+.DS_Store
+Thumbs.db
+# Projects that must not be pushed to this store's remote (say, company data that may not leave), one folder per line:
+# projects/<project>/
