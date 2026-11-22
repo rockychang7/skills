@@ -25,6 +25,7 @@ npx skills update
 | Skill | 说明 |
 | --- | --- |
 | [rein-analyzing-requirements](./skills/rein-analyzing-requirements/SKILL.md) | 把产品需求文档变成一份对照代码检查过的底稿，再生成需求导读、后端安排、建表 SQL、上线清单、前端接口对接。需求变了，按每个读者上次收到的那版标出改动，并写好群通知。产出可选中文或英文。需要 Python 3.9 及以上（只用标准库） |
+| [rein-managing-project-docs](./skills/rein-managing-project-docs/SKILL.md) | 让每个项目的文档都是同样几类、同样的起名（内部说明、决定记录、一件事一个工作文件夹装方案和测试记录、笔记），每一类放项目仓库还是放所有项目外面的私库，由你按项目或按一组项目定。负责建私库、登记项目、在两边之间挪文档、做完的事收尾归档，并检查放错地方、起错名字的文件。会给 Claude Code 和 Codex 装一段简短的全局规则。需要 Node.js 18 及以上（不用装依赖） |
 
 ## 目录结构
 
