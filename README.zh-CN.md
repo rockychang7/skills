@@ -25,7 +25,7 @@ npx skills update
 | Skill | 说明 |
 | --- | --- |
 | [rein-analyzing-requirements](./skills/rein-analyzing-requirements/SKILL.md) | 把产品需求文档变成一份对照代码检查过的底稿，再生成需求导读、后端安排、建表 SQL、上线清单、前端接口对接。需求变了，按每个读者上次收到的那版标出改动，并写好群通知。产出可选中文或英文。需要 Python 3.9 及以上（只用标准库） |
-| [rein-managing-project-docs](./skills/rein-managing-project-docs/SKILL.md) | 让每个项目的文档都是同样几类、同样的起名（内部说明、决定记录、一件事一个工作文件夹装方案和测试记录、笔记），每一类放项目仓库还是放所有项目外面的私库，由你按项目或按一组项目定。负责建私库、登记项目、在两边之间挪文档、做完的事收尾归档，并检查放错地方、起错名字的文件。会给 Claude Code 和 Codex 装一段简短的全局规则。需要 Node.js 18 及以上（不用装依赖） |
+| [rein-managing-project-docs](./skills/rein-managing-project-docs/SKILL.md) | 让每个项目的文档都放在 `docs/` 下，起名都一样。项目自己的文档（`AGENTS.md`、`CLAUDE.md`、`docs/ARCHITECTURE.md`、`docs/CONVENTION.md`）固定名字和位置，需要时给出只有小节标题的骨架，并在 `AGENTS.md` 里维护"文档在哪"一小段，内容仍由你写。和 AI 一起干活产生的东西（方案、测试记录、一次性脚本和数据、页面草稿、说明页、决定记录、笔记，什么格式都行）放 `docs/process/`；提不提交由你按项目或按一组项目定，不提交的只在你这台电脑上被 git 忽略，再单向备份进私库。附带说明页、测试记录、调研三种 html 页面模板。会给 Claude Code 和 Codex 装一段简短的全局规则。需要 Node.js 18 及以上（不用装依赖） |
 
 ## 目录结构
 
