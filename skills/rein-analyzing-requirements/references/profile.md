@@ -18,7 +18,7 @@ committed and teammates share it.
 
 ```json
 {
-  "workspace": "docs/requirements",
+  "workspace": "docs/process/requirements",
   "envs": ["dev", "test", "prod"],
   "clients": [{ "id": "b", "name": "B 端后台" }, { "id": "c", "name": "C 端小程序" }],
   "facts": "docs/req-facts.md"

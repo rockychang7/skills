@@ -5,7 +5,7 @@ license: MIT
 compatibility: "Requires Python 3.9+ (standard library only) to run scripts/req.py."
 metadata:
   author: rockychang7
-  version: "0.1.0"
+  version: "0.1.1"
 ---
 
 # Analyzing Requirements
@@ -107,11 +107,13 @@ from the project directory so that it finds the project settings.
 ## When to stop and ask
 
 - **`new` reports `workspace.not-set`.** Ask once, offering the result's
-  `suggestions`: inside the project (`docs/requirements/`, committed with the
-  code), a folder outside it (shared by all projects, never committed), or a
-  path of their own. Then `config set workspace <path>`; where the folder is
-  decides whether it is saved for this project or for all. It is never asked
-  again.
+  `suggestions`: inside the project with its other working documents
+  (`docs/process/requirements/`, committed or not as the project's
+  `docs/process/` is), a folder outside it (shared by all projects, never
+  committed), or a path of their own. Do not pick one for them; only when
+  they leave it to you, use `docs/process/requirements/`. Then
+  `config set workspace <path>`; where the folder is decides whether it is
+  saved for this project or for all. It is never asked again.
 - **`check` reports `confirm` items.** List each one in plain words (what,
   why, what happens if not), wait for the answer, record it in
   `confirmations`.

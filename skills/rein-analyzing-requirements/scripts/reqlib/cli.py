@@ -374,7 +374,7 @@ def build_parser() -> argparse.ArgumentParser:
         "Remember a setting so it is not asked again.\n"
         "  project settings: .req-profile.json in the project root\n"
         "  user settings:    the user config, used by every project",
-        ["config set workspace docs/requirements"],
+        ["config set workspace docs/process/requirements"],
     )
     config_sub = p.add_subparsers(dest="action", metavar="<action>", title="actions")
     config_sub.required = True
@@ -388,7 +388,7 @@ def build_parser() -> argparse.ArgumentParser:
         "             outside -> user settings (all projects). No --scope needed.\n"
         "  lang       language of generated files: %s. Needs --scope." % ", ".join(LANGS),
         [
-            "config set workspace docs/requirements",
+            "config set workspace docs/process/requirements",
             "config set workspace ~/Documents/requirements",
             "config set lang en --scope user",
         ],

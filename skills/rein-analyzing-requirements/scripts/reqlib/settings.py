@@ -144,9 +144,10 @@ def workspace_suggestions(settings: Settings) -> list[dict[str, str]]:
     return [
         {
             "scope": "project",
-            "path": "docs/requirements",
-            "full_path": str(settings.root / "docs" / "requirements"),
-            "why": "inside the project, next to the code; can be committed with it",
+            "path": "docs/process/requirements",
+            "full_path": str(settings.root / "docs" / "process" / "requirements"),
+            "why": "inside the project, with the documents made while working on it (docs/process/); "
+            "committed or not, and backed up, together with them. Use it when the user does not say",
         },
         {
             "scope": "user",
