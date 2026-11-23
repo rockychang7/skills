@@ -1,12 +1,7 @@
----
-title: What was decided, in one sentence
-date: YYYY-MM-DD
-status: accepted
----
-
 # What was decided, in one sentence
 
-<!-- Write headings and text in the user's language; this template only gives the structure. -->
+<!-- Write headings and text in the user's language; this template only gives the structure.
+     When a later decision replaces this one, add a first line: "Replaced by decisions/YYYY-MM-DD-….md". -->
 
 ## Context
 

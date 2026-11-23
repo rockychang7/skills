@@ -1,12 +1,6 @@
----
-title: What this work achieves
-date: YYYY-MM-DD
-status: active
----
-
 # What this work achieves
 
-<!-- Write headings and text in the user's language; this template only gives the structure. -->
+<!-- Write headings and text in the user's language; this template only gives the structure. An HTML plan follows the same outline. -->
 
 ## Goal
 
