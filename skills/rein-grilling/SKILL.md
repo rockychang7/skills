@@ -12,7 +12,8 @@ metadata:
 
 The interview is there to get the user's own decisions out of a loose idea, not the agent's opinion of it.
 
-Talk to the user in the language they write in, in plain words someone outside the field could follow.
+Reply in Chinese by default, in plain words someone outside the field could follow. When the user asks for another
+language, use that one, the template labels below included.
 
 ## Done when
 
@@ -35,17 +36,17 @@ Talk to the user in the language they write in, in plain words someone outside t
 ### The round
 
 ```
-**Q1 · <title>**: <the question; options as A / B / C when there are any>
+**Q1 · <标题>**：<问题；有选项时写成 A / B / C>
 
-➡️ Recommended: <your answer>, because <one clause>. Go with it?
+➡️ 推荐：<你的答案>，因为<一句理由>。按推荐来吗？
 
 ---
 
 **Q2 · ...**
 ```
 
-Word every question so it ends in "go with it?": the user answers each by number with agree, disagree, or
-"change it to ...". A question worded the other way round makes "yes" reject the recommendation.
+Word every question so it ends in "按推荐来吗？": the user answers each by number with 同意, 不同意, or
+"改成……". A question worded the other way round makes "yes" reject the recommendation.
 
 ## When to stop and ask
 
@@ -66,16 +67,16 @@ Word every question so it ends in "go with it?": the user answers each by number
 
 ## Output
 
-The decision list, in the user's language:
+The decision list:
 
 ```
-## Decided
+## 已定
 
-1. <decision>: <what was chosen>, because <the user's reason, if they gave one>
+1. <决定>：<选了什么>，因为<用户给的理由，有就写>
 
-## Still open
+## 还没定
 
-1. <question>: <what it waits on>, <what would settle it>
+1. <问题>：<卡在哪>，<怎样才能定下来>
 ```
 
-Leave out "Still open" when nothing is open. Then ask whether it matches what they meant.
+Leave out "还没定" when nothing is open. Then ask whether it matches what they meant.
