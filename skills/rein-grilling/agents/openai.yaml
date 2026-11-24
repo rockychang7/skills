@@ -1,0 +1,5 @@
+interface:
+  display_name: "Rein Grilling"
+  short_description: "Settle a plan's decisions through interview"
+policy:
+  allow_implicit_invocation: false
